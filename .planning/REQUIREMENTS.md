@@ -68,32 +68,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KB-01 | TBD | Pending |
-| KB-02 | TBD | Pending |
-| KB-03 | TBD | Pending |
-| KB-04 | TBD | Pending |
-| KB-05 | TBD | Pending |
-| SEL-01 | TBD | Pending |
-| SEL-02 | TBD | Pending |
-| SEL-03 | TBD | Pending |
-| SEL-04 | TBD | Pending |
-| REP-01 | TBD | Pending |
-| REP-02 | TBD | Pending |
-| REP-03 | TBD | Pending |
-| REP-04 | TBD | Pending |
-| REP-05 | TBD | Pending |
-| SAFE-01 | TBD | Pending |
-| SAFE-02 | TBD | Pending |
-| SAFE-03 | TBD | Pending |
-| SAFE-04 | TBD | Pending |
-| SAFE-05 | TBD | Pending |
-| SAFE-06 | TBD | Pending |
+| KB-01 | Phase 1 | Pending |
+| KB-02 | Phase 1 | Pending |
+| KB-03 | Phase 3 | Pending |
+| KB-04 | Phase 3 | Pending |
+| KB-05 | Phase 3 | Pending |
+| SEL-01 | Phase 3 | Pending |
+| SEL-02 | Phase 3 | Pending |
+| SEL-03 | Phase 3 | Pending |
+| SEL-04 | Phase 3 | Pending |
+| REP-01 | Phase 4 | Pending |
+| REP-02 | Phase 4 | Pending |
+| REP-03 | Phase 4 | Pending |
+| REP-04 | Phase 4 | Pending |
+| REP-05 | Phase 2 | Pending |
+| SAFE-01 | Phase 5 | Pending |
+| SAFE-02 | Phase 5 | Pending |
+| SAFE-03 | Phase 4 | Pending |
+| SAFE-04 | Phase 4 | Pending |
+| SAFE-05 | Phase 7 | Pending |
+| SAFE-06 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0 (set during roadmap creation)
-- Unmapped: 20 ⚠️ (resolved by roadmapper)
+- Mapped to phases: 20 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-27*
-*Last updated: 2026-05-27 after initial definition*
+*Last updated: 2026-05-27 after roadmap creation (traceability mapped to 7 phases)*

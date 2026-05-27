@@ -1,0 +1,121 @@
+# Roadmap: Customer Support Email Automation (Phase 1)
+
+## Overview
+
+This roadmap takes a high-volume (~23k emails/7 days, English, US e-commerce) AI support-email system from zero to a quality-gated live rollout. The journey follows the committed safe-deployment spine: survey the knowledge base and catalog its conflicts first (the #1 hallucination defense), build the isolated Freshdesk I/O layer and queued pipeline backbone everything posts through, stand up the two grounding surfaces (transactional Selless MCP + semantic Knowledge MCP/RAG), assemble the classify→extract→ground→draft orchestrator with its safety guards, then make the offline eval harness the load-bearing go-live gate. Only after monitoring + a kill-switch exist does a single routing gate enable the staged 5%→100% rollout. Nothing ships until it clears the evaluation bar.
+
+## Phases
+
+**Phase Numbering:**
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+Decimal phases appear between their surrounding integers in numeric order.
+
+- [ ] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
+- [ ] **Phase 2: Freshdesk I/O Layer & Pipeline Backbone** - Isolated, rate-limit-aware Freshdesk client + queued intake with idempotent, loop-safe posting
+- [ ] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB
+- [ ] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards
+- [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
+- [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
+- [ ] **Phase 7: Staged Rollout (5% → 100%)** - Controlled, quality-gated exposure scaling from 5% to full volume
+
+## Phase Details
+
+### Phase 1: Knowledge Survey & Conflict Inventory
+**Goal**: Produce a trustworthy picture of the existing knowledge base — what sources exist, what they cover, and where they conflict or go stale — so RAG is built on a known foundation rather than indexed blindly.
+**Mode:** mvp
+**Depends on**: Nothing (first phase)
+**Requirements**: KB-01, KB-02
+**Success Criteria** (what must be TRUE):
+  1. A reviewer can open a source inventory listing every Confluence space and Google Sheet/Doc with its format and last-update cadence
+  2. A reviewer can see coverage mapped against the common ticket types (order/tracking, returns/refunds, quality complaints, policy/product) with gaps named
+  3. A reviewer can read a conflict inventory that flags stale, contradictory, or missing policy content as explicit findings (not edge cases)
+  4. CS-team-owned knowledge gaps (tacit/missing content) are surfaced as action items, not silently absorbed
+**Plans**: TBD
+
+### Phase 2: Freshdesk I/O Layer & Pipeline Backbone
+**Goal**: Stand up the only module allowed to talk to Freshdesk plus the queued, stateless intake it feeds — centralizing rate-limit handling, the reply-vs-note distinction, and the idempotency/loop guards that prevent duplicate or runaway sends.
+**Mode:** mvp
+**Depends on**: Phase 1
+**Requirements**: REP-05
+**Success Criteria** (what must be TRUE):
+  1. An inbound Freshdesk ticket event reaches a queued worker via webhook (with a safety-net poller as reconciliation backup) and is processed exactly once
+  2. The system can post a reply into the correct existing ticket via the Freshdesk API, and a retried or duplicate inbound never produces a second send (idempotency key per inbound)
+  3. The client honors Freshdesk rate limits (backoff/jitter, `Retry-After`) and routes repeated failures to a dead-letter path for a human instead of dropping silently
+  4. Auto-generated / no-reply / mailer-daemon mail and synced ticket updates are detected and never trigger an auto-reply loop
+**Plans**: TBD
+
+### Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)
+**Goal**: Build the two separate grounding surfaces the drafter relies on — a transactional Selless MCP for scoped lookup-by-ID reads and a Knowledge MCP serving cited semantic search over an ingested, conflict-aware RAG store — so the orchestrator never reads source systems directly.
+**Mode:** mvp
+**Depends on**: Phase 1 (survey gates KB ingest), Phase 2 (foundation)
+**Requirements**: KB-03, KB-04, KB-05, SEL-01, SEL-02, SEL-03, SEL-04
+**Success Criteria** (what must be TRUE):
+  1. The Knowledge MCP answers a semantic query over the ingested RAG store and returns passages with source citations carrying source/recency/authority metadata
+  2. The KB ingest pipeline builds the centralized store from the surveyed Confluence + Google sources and can be re-synced/re-indexed when policies change
+  3. The Selless MCP returns order status, customer info, purchase history, and prior ticket history keyed to the ticket's verified customer/order ID (no free-text cross-customer search)
+  4. Every Selless MCP call is read-only, scope-enforced, rate-limited, and audit-logged
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards
+**Goal**: Assemble the per-ticket pipeline that re-classifies the ticket, extracts the answer key, drafts a citation-grounded reply via the two MCPs, self-critiques against the rubric, and is wrapped by the escalation rules and output guards that make it safe to evaluate.
+**Mode:** mvp
+**Depends on**: Phase 3
+**Requirements**: REP-01, REP-02, REP-03, REP-04, SAFE-03, SAFE-04
+**Success Criteria** (what must be TRUE):
+  1. An incoming ticket is re-classified into the correct support category with a confidence signal, and the order ref / customer / issue type are extracted
+  2. The orchestrator produces a draft grounded in retrieved order data + KB content with citations, making no ungrounded claims, and runs a self-critique pass scoring it against the quality rubric before any send
+  3. High-risk tickets (money/refund, legal/complaints, complex/ambiguous) are auto-routed to a human — any high-risk signal escalates the whole ticket — rather than auto-answered
+  4. An output guard blocks commitment language about refunds/credits/charges/order changes regardless of category, and email body content is treated as data (delimited, injection-screened) not instructions
+**Plans**: TBD
+
+### Phase 5: Offline Evaluation Harness (THE GATE)
+**Goal**: Make answer quality measurable and binding — replay a golden dataset of historical tickets through the same production pipeline code, score faithfulness/correctness/tone (not similarity to flawed past replies), and define the numeric quality bar that gates go-live.
+**Mode:** mvp
+**Depends on**: Phase 4
+**Requirements**: SAFE-01, SAFE-02
+**Success Criteria** (what must be TRUE):
+  1. The harness replays the golden dataset (Freshdesk export → normalized, PII-handled JSONL) through the production orchestrator/guardrail code and never posts to Freshdesk
+  2. Reports show faithfulness/correctness (and tone) metrics with a stratified set including high-risk, adversarial/injection, and conflicting-policy cases — plus a held-out set the pipeline was never tuned against
+  3. A defined quality bar exists (e.g., grounding-correct ≥ target, zero refund-commitment leaks, 100% high-risk escalation) and a run produces an explicit pass/fail go-live verdict against it
+**Plans**: TBD
+
+### Phase 6: Routing Gate, Monitoring & Kill-Switch
+**Goal**: Build the single chokepoint every candidate reply passes through — risk rules + grounding check + deterministic hash-bucket mode resolution — and the live monitoring dashboard plus kill-switch that MUST exist before any live send.
+**Mode:** mvp
+**Depends on**: Phase 5
+**Requirements**: SAFE-06
+**Success Criteria** (what must be TRUE):
+  1. Every candidate reply passes through one routing gate that decides escalate-vs-answer and shadow-vs-live via deterministic hash(ticket id) bucketing, so a retried ticket never flips mode
+  2. A live quality dashboard shows reply performance, escalation rate, grounding-confidence distribution, reopen rate, and guardrail-trigger counts with alert thresholds
+  3. A kill-switch can immediately halt all auto-sending and fall back to draft-only, verified working before any live percentage is enabled
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 7: Staged Rollout (5% → 100%)
+**Goal**: Expose the system to real volume incrementally and safely — flip one config value to send AI replies to a configurable percentage of traffic, holding and monitoring at each step, scaling toward 100% only while quality holds.
+**Mode:** mvp
+**Depends on**: Phase 6
+**Requirements**: SAFE-05
+**Success Criteria** (what must be TRUE):
+  1. A configurable rollout control sends AI replies to a defined percentage of volume (starting at ~5%) using deterministic, stable bucketing
+  2. The percentage can be increased gradually toward 100%, with each increase gated on the eval bar holding and dashboard quality remaining healthy
+  3. High-risk escalation rules stay permanent through scaling (coverage is quality-gated, not maximized), and the kill-switch remains the immediate fallback at every step
+**Plans**: TBD
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Knowledge Survey & Conflict Inventory | 0/TBD | Not started | - |
+| 2. Freshdesk I/O Layer & Pipeline Backbone | 0/TBD | Not started | - |
+| 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 0/TBD | Not started | - |
+| 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
+| 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
+| 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
+| 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
