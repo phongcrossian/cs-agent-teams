@@ -12,7 +12,7 @@ This roadmap takes a high-volume (~23k emails/7 days, English, US e-commerce) AI
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
+- [x] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
 - [ ] **Phase 2: Freshdesk I/O Layer & Pipeline Backbone** - Isolated, rate-limit-aware Freshdesk client + queued intake with idempotent, loop-safe posting
 - [ ] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB
 - [ ] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards
@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-01-PLAN.md — Whimsical workflow vertical slice: SURVEY.md skeleton + GLOSSARY + CODE-MAP + Policy-Threshold Index (autonomous, Wave 1)
 - [x] 01-02-PLAN.md — Email Templates survey + code→template wiring (Wave 2, CS-Lead-gated for full enumeration)
 - [x] 01-03-PLAN.md — Confluence SCE root-cause guides survey + taxonomy (Wave 2, CS-Lead-gated access)
-- [ ] 01-04-PLAN.md — Convergence: conflict inventory + threshold axis, coverage-map CSV (evidence-validated), CS-team action items (Wave 3)
+- [x] 01-04-PLAN.md — Convergence: conflict inventory + threshold axis, coverage-map CSV (evidence-validated), CS-team action items (Wave 3)
 
 ### Phase 2: Freshdesk I/O Layer & Pipeline Backbone
 **Goal**: Stand up the only module allowed to talk to Freshdesk plus the queued, stateless intake it feeds — centralizing rate-limit handling, the reply-vs-note distinction, and the idempotency/loop guards that prevent duplicate or runaway sends.
@@ -116,7 +116,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Knowledge Survey & Conflict Inventory | 3/4 | In Progress|  |
+| 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 0/TBD | Not started | - |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 0/TBD | Not started | - |
 | 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
