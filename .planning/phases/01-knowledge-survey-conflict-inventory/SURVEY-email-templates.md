@@ -2,10 +2,10 @@
 phase: 01-knowledge-survey-conflict-inventory
 document: SURVEY-email-templates.md
 role: email-templates-source-inventory
-status: partial — awaiting cancellation-request templates (checkpoint)
+status: complete — all 24 template files inventoried and wired (F-codes provided at checkpoint)
 source_url: https://sites.google.com/d/1NCS0KCGO-4Kj2DXEbwW7cAok-tLh37M0/p/1gop1-Fy6OxafB3wzzrVy0MBwKqWECH0M/edit
 last_updated: "2026-05-29"
-produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
+produced_by: Plan 02 (Task 1 autonomous survey + Task 2 post-checkpoint fold-in)
 ---
 
 # Email Templates Inventory
@@ -42,15 +42,15 @@ produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
 | 13 | Shipping queries/complaints — RTS (Return to sender) | Markdown | `snapshots/shipping queries & complaints-template3.md` | G11-Bra, G11-Pants, G11-Non-apparel, G13 | Snapshotted | G11 = replacement offer for returned packages (3 product-line variants). G13 = failed delivery / courier attempting redelivery. |
 | 14 | Shipping queries/complaints — Test contract | Markdown | `snapshots/shipping queries & complaints-template4.md` | G12 | Snapshotted | Single template: test-contract order cancelled; 30% discount on next purchase offered. |
 | 15 | Shipping queries/complaints — Common shipping scenarios | Markdown | `snapshots/shipping queries & complaints-template5.md` | G1, G2, G4, G5, G6, G7, G8-Bra, G8-Pants, G8-Non-apparel, G9 | Snapshotted | G1–G9 (all found). G8 has 3 product-line variants. G9 is second-response (promise replacement/refund on day 40). |
-| 16 | Cancellation request — template 1 | Markdown | `snapshots/cancellation request-template1.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 17 | Cancellation request — template 2 | Markdown | `snapshots/cancellation request-template2.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 18 | Cancellation request — template 3 | Markdown | `snapshots/cancellation request-template3.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 19 | Cancellation request — template 4 | Markdown | `snapshots/cancellation request-template4.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 20 | Cancellation request — template 5 | Markdown | `snapshots/cancellation request-template5.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 21 | Cancellation request — template 6 | Markdown | `snapshots/cancellation request-template6.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 22 | Cancellation request — template 7 | Markdown | `snapshots/cancellation request-template7.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 23 | Cancellation request — template 8 | Markdown | `snapshots/cancellation request-template8.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
-| 24 | Cancellation request — template 9 | Markdown | `snapshots/cancellation request-template9.md` | Unknown — F-codes (TBD) | **EMPTY** | Placeholder file, 0 bytes. CS Lead must export content. |
+| 16 | Cancellation request — New/Processing/Pending — Aftersale promotion | Markdown | `snapshots/cancellation request-template1.md` | F23 | Snapshotted | After-sales promotion price-variation explanation; shipping-fee waiver / 20% refund. F23 is a NEW code (not in CODE-MAP.md). |
+| 17 | Cancellation request — New/Processing/Pending — Discount not applied | Markdown | `snapshots/cancellation request-template2.md` | F15, F16 | Snapshotted | Discount <20% PO (apply discount) vs >20% PO (offer 20% refund cap). |
+| 18 | Cancellation request — New/Processing/Pending — Duplicated DO(s) | Markdown | `snapshots/cancellation request-template3.md` | F9, F10 | Snapshotted | F9 = order not found (hold 48h); F10 = order found (20% refund on 2nd order). |
+| 19 | Cancellation request — New/Processing/Pending — Not recognize transaction | Markdown | `snapshots/cancellation request-template4.md` | F21 | Snapshotted | Provides order detail list for verification; 20% refund to retain. |
+| 20 | Cancellation request — New/Processing/Pending — Wrong variants | Markdown | `snapshots/cancellation request-template5.md` | F7-Bra, F7-Pants | Snapshotted | Size/color swap OR 20% refund; 48h validity. Two product-line variants. |
+| 21 | Cancellation request — New/Processing/Pending — Other reasons | Markdown | `snapshots/cancellation request-template6.md` | F1, F2, F3, F4, F14 | Snapshotted | F1 unknown reason, F2 cheaper price, F3 bad reviews, F4 shipping time, F14 product origin. Mostly 20% refund retention (F4 = express shipping upgrade). |
+| 22 | Cancellation request — Next responses | Markdown | `snapshots/cancellation request-template7.md` | F12, F13, F22 | Snapshotted | F12 = cancel confirmed + refund; F13 = resume (20% accepted); F22 = resume (express accepted). |
+| 23 | Cancellation request — TA DO(s) | Markdown | `snapshots/cancellation request-template8.md` | F5, F17, F18 | Snapshotted | In-transit / need SCE; 1-hour window message. F5 = other reasons; F17/F18 = discount <20% / >20% PO. |
+| 24 | Cancellation request — TO DO(s) | Markdown | `snapshots/cancellation request-template9.md` | F6, F8, F11, F19, F20 | Snapshotted | Cannot cancel (in processing); 45-day return policy. F8 uses 40% discount (others 20%). |
 
 ---
 
@@ -63,8 +63,8 @@ produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
 | Product Complaint — Replacement not fit | 1 | C2 | Fully snapshotted |
 | Change Request | 5 | E1–E13 (all 13 E-codes present) | Fully snapshotted |
 | Shipping Queries & Complaints | 5 | G1–G15 (all found; G3 has sub-codes G3.1/G3.2) | Fully snapshotted |
-| Cancellation Request | 5 | F-codes (TBD) | **All empty — awaiting export** |
-| **Total** | **20** | **A1–A9, B1–B13 (excl. B4), C1–C2, D1–D9, E1–E13, G1–G15** | **15 snapshotted; 5 empty** |
+| Cancellation Request | 9 | F1–F23 (all found; F23 is a new code beyond CODE-MAP.md's F1–F22) | Fully snapshotted (provided at checkpoint) |
+| **Total** | **24** | **A1–A9, B1–B13 (excl. B4), C1–C2, D1–D9, E1–E13, F1–F23, G1–G15** | **24 snapshotted; 0 empty** |
 
 ---
 
@@ -85,11 +85,14 @@ produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
   WorkFlow.svg. It may be a retired code or subsumed into another range (e.g., within the
   "B(5),(6),(7),8" notation). Flagged for Plan 03/04 verification.
 
-### F-Codes — All 5 cancellation request template files are empty
+### F-Codes — RESOLVED at checkpoint (templates provided 2026-05-29)
 
-- **F1–F22** (22 codes total from CODE-MAP.md) have no template content available yet.
-  The 5 placeholder files confirm the template pages exist on Google Sites, but content has
-  not been exported. This is the primary gap requiring human action (see checkpoint below).
+- All 9 cancellation request template files now contain content. **F1–F23** are wired in
+  CODE-MAP-templates.md. No F-code content gap remains.
+- **Residual discrepancy (not a content gap):** F23 (Aftersale promotion) is a NEW code
+  present in the templates but absent from CODE-MAP.md (Plan 01 listed F1–F22). Add F23 to
+  CODE-MAP.md in Plan 04. Several CODE-MAP.md F-code descriptions were generic and should be
+  reconciled against the verbatim template headings now captured.
 
 ### G-Code gaps (minor)
 
@@ -107,25 +110,32 @@ produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
 | G3.1, G3.2 | `shipping queries & complaints-template2.md` | Sub-codes of G3; recorded in CODE-MAP-templates.md |
 | G13 | `shipping queries & complaints-template3.md` | Already in CODE-MAP.md range; template confirmed |
 | G14, G15 | `shipping queries & complaints-template1.md` | Not listed in original G1–G13 CODE-MAP range — **new discovery**; added to CODE-MAP-templates.md and flagged for CODE-MAP.md update in Plan 04 |
+| F23 | `cancellation request-template1.md` | Not listed in original F1–F22 CODE-MAP range — **new discovery** (Aftersale promotion); added to CODE-MAP-templates.md and flagged for CODE-MAP.md update in Plan 04 |
 
 ---
 
 ## Checkpoint Status
 
-**Status as of Plan 02 Task 1 (autonomous survey):** Partial — 15 of 20 template pages snapshotted.
+**Status as of Plan 02 Task 2 (post-checkpoint):** COMPLETE — checkpoint resolved
+("templates provided"). 24 of 24 template files snapshotted; all carry content.
 
 **What is complete:**
 - All Product Complaint templates (A/B/C/D codes): fully snapshotted and wired.
 - All Change Request templates (E-codes, all 13): fully snapshotted and wired.
 - All Shipping Queries & Complaints templates (G-codes, G1–G15 + G3.1/G3.2): fully snapshotted and wired.
+- All Cancellation Request templates (F-codes, F1–F23): fully snapshotted and wired (provided at checkpoint).
 
-**What requires human action:**
-1. The 5 Cancellation Request template files are empty (0 bytes). CS Lead must export the
-   Google Sites cancellation-request template pages to Markdown and place them in `snapshots/`.
-2. Confirmation that the 20-file set is complete — i.e., no additional template pages exist
-   on the Google Sites site that have NOT been placed in snapshots/ (even as empty placeholders).
-3. Full page-by-page enumeration of the Google Sites site to confirm no pages are missing
-   from the current 20-file list (requires CS Lead read-only viewer access).
+**Checkpoint resolution (2026-05-29):**
+- The 9 cancellation request template files were filled by the user with real template content.
+- F1–F23 are now wired (F23 = new code discovered, beyond the original F1–F22 range).
+- The Email Templates source (SRC-02) is now inventoried **complete-as-available**: every
+  template file present in `snapshots/` is inventoried and (where it carries codes) wired.
+
+**Residual (non-blocking) follow-ups for Plan 04:**
+1. Confirm the 24-file set is the *complete* Google Sites page list (full page-by-page
+   enumeration still benefits from CS-Lead viewer access, but no missing-content gap is known).
+2. Add F23 and G14/G15 to CODE-MAP.md (Plan 01 owns it; updated by Plan 04).
+3. Confirm Google Sites update cadence with CS Lead (governance gap).
 
 ---
 
@@ -133,12 +143,14 @@ produced_by: Plan 02 (Task 1 — autonomous survey of existing snapshots)
 
 > **For Plan 04 / reviewer reconciliation (do not edit SURVEY.md directly):**
 >
-> SRC-02 (Google Sites Email Templates) status as of Plan 02, Task 1:
-> - **Survey: complete-as-available** — all non-empty snapshot files are inventoried and wired.
-> - **Pending:** 5 cancellation-request template files are empty; F-code wiring cannot be
->   completed until CS Lead exports those pages.
-> - **Snapshot path:** All files under `snapshots/` (20 Markdown files; 15 with content).
+> SRC-02 (Google Sites Email Templates) status as of Plan 02 (COMPLETE):
+> - **Survey: surveyed (complete-as-available)** — all 24 snapshot files are inventoried
+>   and wired. No empty placeholder files remain; no known missing-content gap.
+> - **Snapshot path:** All files under `snapshots/` (24 Markdown files; all with content).
+> - **Code coverage:** A1–A9, B1–B13 (excl. B4), C1–C2, D1–D9, E1–E13, F1–F23, G1–G15.
 > - **Update cadence:** TBD — CS Lead has not confirmed a review/update schedule for the
 >   Google Sites. Flag as a governance gap in Plan 04 action items.
-> - **G14/G15 discovery:** These codes are not in the original G1–G13 CODE-MAP.md range.
->   Plan 04 should update CODE-MAP.md to add G14 and G15 as shipping-inquiry DNR replacement codes.
+> - **New codes for CODE-MAP.md update (Plan 04):** F23 (Aftersale promotion), G14 and G15
+>   (DNR replacement codes) — present in templates but beyond CODE-MAP.md's original ranges.
+> - **B4 gap:** Still no template found for B4; confirmed missing across all sources. Plan 04
+>   to mark deprecated or resolve via Confluence.

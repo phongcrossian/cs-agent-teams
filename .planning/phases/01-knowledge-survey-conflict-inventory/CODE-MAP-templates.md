@@ -2,7 +2,7 @@
 phase: 01-knowledge-survey-conflict-inventory
 document: CODE-MAP-templates.md
 role: workflow-code-to-email-template-wiring
-status: partial — F-codes pending cancellation template export
+status: complete — F-codes wired (cancellation templates provided at checkpoint)
 source: snapshots/*.md (email template files in snapshots/)
 companion: CODE-MAP.md (workflow-code-to-action mapping from Plan 01)
 last_updated: "2026-05-29"
@@ -141,38 +141,63 @@ Source file: `snapshots/product complaint-within guarantee-template3.md`
 
 ## F-Codes: Cancellation Request Actions
 
-> **STATUS: ALL EMPTY — No template content available.**
+> **STATUS: WIRED (templates provided at checkpoint, 2026-05-29).**
 >
-> All 5 cancellation request template files (cancellation request-template1.md through
-> cancellation request-template5.md) are 0 bytes. F-code wiring cannot be completed until
-> the CS Lead exports the Google Sites cancellation request template pages to Markdown.
+> All 9 cancellation request template files now contain content. F1–F23 are wired below.
+> Codes are organized by DO status (New/Processing/Pending = can cancel; TA = in-transit /
+> need SCE; TO = delivered / cannot cancel) and by cancellation reason.
 >
-> From CODE-MAP.md, 22 F-codes exist (F1–F22). None can be wired to a template heading.
+> **NOTE:** F23 was discovered in the templates — it is NOT in CODE-MAP.md (Plan 01 listed
+> F1–F22). F23 is added here and flagged for CODE-MAP.md update in Plan 04. The range is
+> therefore F1–F23 (23 codes), not F1–F22.
+
+### F-codes — New/Processing/Pending orders (CAN cancel; reason-based retention offers)
 
 | Code | Template Heading (verbatim) | Product Line | Snapshot File | Notes |
 |------|-----------------------------|--------------|---------------|-------|
-| F1 | — | — | cancellation request-template?.md | **EMPTY FILE** — template not yet exported. |
-| F2 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F3 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F4 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F5 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F6 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F7 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F8 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F9 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F10 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F11 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F12 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F13 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F14 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F15 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F16 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F17 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F18 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F19 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F20 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F21 | — | — | cancellation request-template?.md | **EMPTY FILE** |
-| F22 | — | — | cancellation request-template?.md | **EMPTY FILE** |
+| F1 | `F1-Can cancel-Unknown reason` | All | cancellation request-template6.md | Retention: 20% refund via Loyalty Program, 48h validity. |
+| F2 | `F2-Can cancel-Find a cheaper price` | All | cancellation request-template6.md | Retention: instant 20% refund + size/color swap, 48h validity. |
+| F3 | `F3-Can cancel-Bad reviews` | All | cancellation request-template6.md | Retention: 20% refund + 45-day return policy reassurance, 2-day validity. |
+| F4 | `F4-Can cancel-Shipping time too long` | All | cancellation request-template6.md | Retention: complimentary expedited shipping upgrade (7–10 days), no refund. |
+| F14 | `F14-Can cancel-Customer concerns regarding product's origin` | All | cancellation request-template6.md | Retention: explains Asia manufacturing partners; 20% refund, 2-day validity. |
+| F7 | `F7-Bra-Can cancel-Wrong variants` | Bra | cancellation request-template5.md | Retention: size/color swap (requests underbust/full-bust) OR 20% refund, 48h validity. |
+| F7 | `F7-Pants-Can cancel-Wrong variants` | Pants | cancellation request-template5.md | Retention: size/color swap (requests waist/hip/inseam) OR 20% refund, 48h validity. |
+| F9 | `F9-Can cancel-Duplicated-Order not found` | All | cancellation request-template3.md | Only one order found; order held 48h before auto-cancellation if no reply. |
+| F10 | `F10-Can cancel-Duplicated-Order found` | All | cancellation request-template3.md | Two orders found; offers 20% refund on second order to retain both. |
+| F15 | `F15-Can cancel-Discount less than 20% PO` | All | cancellation request-template2.md | Offers to apply discount code immediately to retain order (discount < 20% of PO). |
+| F16 | `F16-Can cancel-Discount greater than 20% PO` | All | cancellation request-template2.md | Offers 20% refund (cap) to retain; 48h validity (requested discount > 20% of PO). |
+| F21 | `F21-Not Recognize Order` | All | cancellation request-template4.md | Provides full order detail list for verification; 20% refund if customer keeps order. |
+| F23 | `F23-Can cancel-Aftersale promotion` | All | cancellation request-template1.md | **NEW CODE (not in CODE-MAP.md).** Explains after-sales promotion price variation; offers shipping-fee waiver / 20% refund. |
+
+### F-codes — TA DO(s) (in-transit; need SCE to confirm; outside 1-hour window)
+
+| Code | Template Heading (verbatim) | Product Line | Snapshot File | Notes |
+|------|-----------------------------|--------------|---------------|-------|
+| F5 | `F5-Need SCE to confirm` | All | cancellation request-template8.md | Outside 1h window; forwarded to fulfillment; 20% refund offered to retain. |
+| F17 | `F17-Need SCE to confirm-Discount less than 20% PO` | All | cancellation request-template8.md | Outside 1h window; SCE check; can apply discount without cancelling (< 20% of PO). |
+| F18 | `F18-Need SCE to confirm-Discount greater than 20% PO` | All | cancellation request-template8.md | Outside 1h window; SCE check; offers 20% refund (cap) without cancelling (> 20% of PO). |
+
+### F-codes — TO DO(s) (delivered/processing; CANNOT cancel; outside window)
+
+| Code | Template Heading (verbatim) | Product Line | Snapshot File | Notes |
+|------|-----------------------------|--------------|---------------|-------|
+| F6 | `F6-Cannot cancel-Unknown reason` | All | cancellation request-template9.md | Cannot cancel (in processing); 45-day return/exchange policy referenced. |
+| F8 | `F8-Cannot cancel-Wrong variants` | All | cancellation request-template9.md | Cannot cancel; 45-day return policy + 40% discount link (CELW40). |
+| F11 | `F11-Cannot cancel-Duplicated` | All | cancellation request-template9.md | Cannot cancel; 20% cashback on second order; 45-day return policy. |
+| F19 | `F19-Cannot cancel-Discount less than 20% PO` | All | cancellation request-template9.md | Cannot cancel; applies requested discount as goodwill; 45-day return policy. |
+| F20 | `F20-Cannot cancel-Discount greater than 20% PO` | All | cancellation request-template9.md | Cannot cancel; offers 20% refund (cap); 45-day return policy. |
+
+### F-codes — Next responses (confirmation / resume after customer reply)
+
+| Code | Template Heading (verbatim) | Product Line | Snapshot File | Notes |
+|------|-----------------------------|--------------|---------------|-------|
+| F12 | `F12-Cancel Order-No update from customer/Customer still requests cancellation` | All | cancellation request-template7.md | Confirms cancellation + refund (3–5 days); offers 20% loyalty discount (JRNA20). |
+| F13 | `F13-Resume order-Customer accepts a 20% and keeps the order` | All | cancellation request-template7.md | Customer accepts 20% refund; order resumed; refund processed 3–5 days. |
+| F22 | `F22-Resume order-Customer accepts express shipping and keeps the order` | All | cancellation request-template7.md | Customer accepts express upgrade; order resumed on expedited line. |
+
+> **F-code gap note:** No template heading numbered F4 in the TO/TA set, and no standalone
+> F2/F3 in TA/TO sets — these reasons are handled by the generic F5 (TA) and F6 (TO) catch-all
+> templates rather than reason-specific variants. All 23 F-codes (F1–F23) are now wired.
 
 ---
 
@@ -244,34 +269,18 @@ Source file: `snapshots/shipping queries & complaints-template5.md`
 > These codes appear in CODE-MAP.md but have NO matching template heading in any snapshot file.
 > They are surfaced as coverage gaps for Plan 04.
 
-### Gap Category 1: F-Codes — Template files empty (content exists on Google Sites, not yet exported)
+### Gap Category 1: F-Codes — RESOLVED at checkpoint
 
-All 22 F-codes (F1–F22) from CODE-MAP.md are in this category.
-
-| Code | Code-MAP Description | Gap Type | Action |
-|------|---------------------|----------|--------|
-| F1 | Confirm cancellation eligibility check | Template exists on Google Sites; file empty | CS Lead must export and fill `cancellation request-template*.md` files |
-| F2 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F3 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F4 | Offer express shipping (as alternative to cancellation) | Template exists on Google Sites; file empty | As above |
-| F5 | Customer agrees to proceed | Template exists on Google Sites; file empty | As above |
-| F6 | Reject cancellation request | Template exists on Google Sites; file empty | As above |
-| F7 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F8 | Reject cancellation request (grouped with F6, F11) | Template exists on Google Sites; file empty | As above |
-| F9 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F10 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F11 | Reject cancellation request (grouped with F6, F8) | Template exists on Google Sites; file empty | As above |
-| F12 | Cancel DO/PO | Template exists on Google Sites; file empty | As above |
-| F13 | Process upon customer confirmation | Template exists on Google Sites; file empty | As above |
-| F14 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F15 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F16 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F17 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F18 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F19 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F20 | Cancellation flow branch action | Template exists on Google Sites; file empty | As above |
-| F21 | Offer partial refund to retain order | Template exists on Google Sites; file empty | As above |
-| F22 | Process upon customer confirmation (paired with F13) | Template exists on Google Sites; file empty | As above |
+> **CLOSED 2026-05-29.** All 9 cancellation request template files were provided. F1–F23 are
+> now wired in the F-Codes section above. No F-code template gaps remain.
+>
+> **Residual discrepancies (for Plan 04 reconciliation, NOT content gaps):**
+> - **F23** is a new code present in the templates but absent from CODE-MAP.md (Plan 01 listed
+>   F1–F22). Add F23 to CODE-MAP.md in Plan 04.
+> - CODE-MAP.md described many F-codes generically (e.g. "cancellation flow branch action").
+>   The templates reveal that F-codes are organized by **DO status × cancellation reason**, not
+>   by simple sequential branch. Plan 04 should reconcile CODE-MAP.md F-code descriptions against
+>   the verbatim template headings now captured here.
 
 ### Gap Category 2: B4 — Code possibly retired or subsumed
 
@@ -302,6 +311,10 @@ All 22 F-codes (F1–F22) from CODE-MAP.md are in this category.
 | IC-NEW-02 | G5 | G5 template offers a 50% discount as appeasement gesture for shipping delay — a higher discount rate than the standard 40% discount seen in most other templates. Cross-source threshold discrepancy for Plan 04. | Plan 04 conflict detection |
 | IC-NEW-03 | G12 | G12 (test contract) offers a 30% discount — different from the standard 40% discount and the 20%/50% used elsewhere. May be intentional for test-contract scenario; flag for Plan 04 verification. | Plan 04 conflict detection |
 | IC-NEW-04 | G7 | G7 offers 10% refund as one option vs 40% discount as another — the refund percentage (10%) appears only in this template and is not in POLICY-THRESHOLD-INDEX.md. | Add to POLICY-THRESHOLD-INDEX.md in Plan 04 |
+| IC-NEW-05 | F1, F2, F3, F7, F9, F10, F14, F16, F18, F19, F20, F21 | The 20% cancellation-retention refund is consistent across most F-codes and matches the POLICY-THRESHOLD-INDEX 20% discount cap. Confirms the cap — no conflict, but the cap is applied as a *refund* not just a *discount*. | Note for Plan 04 (likely accept) |
+| IC-NEW-06 | F8 | F8 (cannot-cancel, wrong variants) offers a 40% discount (CELW40 link) — higher than the 20% used in the other cannot-cancel F-codes (F19/F20 use 20%). Inconsistent retention/goodwill rate within the same DO-status group. | Plan 04 conflict detection |
+| IC-NEW-07 | F15, F16, F17, F18, F19, F20 | Cancellation discount handling is gated by a "discount less than / greater than 20% of PO" decision — confirms the 20% discount cap is a hard branch point in the cancellation flow. Cross-check against POLICY-THRESHOLD-INDEX 20% cap. | Note for Plan 04 |
+| IC-NEW-08 | F4, F17, F18, F19, F20, F6, F8, F11 | F-code templates restate the 1-hour modification window (TA/TO codes) and the 45-day return window (TO codes) — cross-source threshold restatement. Reconcile with WorkFlow.svg (1h / 45d) and C1 (45d/14d conflict). | Plan 04 conflict detection |
 
 ---
 
@@ -312,6 +325,6 @@ All 22 F-codes (F1–F22) from CODE-MAP.md are in this category.
 | Fan-out Type | Applies To | Variants |
 |-------------|------------|---------|
 | Bra / Pants / Non-apparel (3 variants) | A1, A6, A7, B1, B5, B6, G8, G11, G14, G15 | Three separate templates; measurement requests differ by product type |
-| Bra / Pants only (2 variants — sizing products) | A2, A8, B2, D1, D5, E4, E6 | Sizing products only; non-apparel not applicable |
-| All products (single template) | A4, A5, A9, B3, B7, B8, B13, C1, C2, D2, D3, D4, D6, D7, D8, D9, E1–E13 (most), G1–G7, G9, G10, G12, G13 | Single template covers all product types |
-| Sub-code split (not product-line) | G3 (G3.1 / G3.2), D6 (two sub-variants), E8 (email / phone) | Split by condition, not product type |
+| Bra / Pants only (2 variants — sizing products) | A2, A8, B2, D1, D5, E4, E6, F7 | Sizing products only; non-apparel not applicable |
+| All products (single template) | A4, A5, A9, B3, B7, B8, B13, C1, C2, D2, D3, D4, D6, D7, D8, D9, E1–E13 (most), F1–F6, F8–F23 (most), G1–G7, G9, G10, G12, G13 | Single template covers all product types |
+| Sub-code split (not product-line) | G3 (G3.1 / G3.2), D6 (two sub-variants), E8 (email / phone), F-codes (by DO status: New/Processing/Pending × TA × TO) | Split by condition, not product type |
