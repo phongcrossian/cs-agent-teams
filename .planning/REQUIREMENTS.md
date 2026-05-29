@@ -9,8 +9,8 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 ### Knowledge Base
 
-- [ ] **KB-01**: Knowledge survey produces an inventory of all sources (Confluence spaces, Google Sheets/Docs), their formats, and coverage per common ticket type
-- [ ] **KB-02**: Knowledge survey produces a conflict inventory flagging stale, contradictory, or missing policy content
+- [x] **KB-01**: Knowledge survey produces an inventory of all sources (Confluence spaces, Google Sheets/Docs), their formats, and coverage per common ticket type
+- [x] **KB-02**: Knowledge survey produces a conflict inventory flagging stale, contradictory, or missing policy content
 - [ ] **KB-03**: An ingest → normalize → index pipeline builds a centralized RAG store from the surveyed sources
 - [ ] **KB-04**: Knowledge content can be re-synced/re-indexed when policies change
 - [ ] **KB-05**: An MCP Knowledge server answers semantic queries over the RAG store and returns source citations with each result
@@ -68,8 +68,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KB-01 | Phase 1 | Pending |
-| KB-02 | Phase 1 | Pending |
+| KB-01 | Phase 1 | Complete |
+| KB-02 | Phase 1 | Complete |
 | KB-03 | Phase 3 | Pending |
 | KB-04 | Phase 3 | Pending |
 | KB-05 | Phase 3 | Pending |
