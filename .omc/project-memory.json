@@ -1,0 +1,83 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780021761900,
+  "projectRoot": "/Users/admin/work/phong/grok-agent-teams",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {},
+  "hotPaths": [
+    {
+      "path": ".planning/phases/01-knowledge-survey-conflict-inventory/01-DISCUSS-CHECKPOINT.json",
+      "accessCount": 2,
+      "lastAccessed": 1780023467318,
+      "type": "file"
+    },
+    {
+      "path": ".planning/PROJECT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780021921779,
+      "type": "file"
+    },
+    {
+      "path": ".planning/REQUIREMENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1780021922789,
+      "type": "file"
+    },
+    {
+      "path": ".planning/ROADMAP.md",
+      "accessCount": 1,
+      "lastAccessed": 1780021923402,
+      "type": "file"
+    },
+    {
+      "path": ".planning/STATE.md",
+      "accessCount": 1,
+      "lastAccessed": 1780021923589,
+      "type": "file"
+    },
+    {
+      "path": "2026-05-28-meeting-note.md",
+      "accessCount": 1,
+      "lastAccessed": 1780022743743,
+      "type": "file"
+    },
+    {
+      "path": ".planning/phases/01-knowledge-survey-conflict-inventory/01-CONTEXT.md",
+      "accessCount": 1,
+      "lastAccessed": 1780023945346,
+      "type": "file"
+    },
+    {
+      "path": ".planning/phases/01-knowledge-survey-conflict-inventory/01-DISCUSSION-LOG.md",
+      "accessCount": 1,
+      "lastAccessed": 1780023995023,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
