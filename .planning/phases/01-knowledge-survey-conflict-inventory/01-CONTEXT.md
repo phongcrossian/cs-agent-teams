@@ -41,25 +41,15 @@ Produce a trustworthy, reviewable picture of the existing knowledge base — wha
   - Google Sites Email Templates → **Markdown** (direct text input ready for Phase 3 ingest)
   - All committed under `.planning/phases/01-knowledge-survey-conflict-inventory/snapshots/`
 
-### To Be Decided During Planning (user wants more info before locking)
-These 3 areas were intentionally left open — `gsd-planner` will surface them with recommendations for user review, NOT auto-decide:
+### Resolved During Planning (locked 2026-05-29 — user selected)
+These 3 areas were intentionally left open at discuss-phase and resolved by the user at plan-phase entry:
 
-- **D-TBD-A: Coverage measurement method** — Three viable approaches:
-  - *Evidence-based:* sample N historical Freshdesk tickets per Level-In category, map each to the KB source(s) the agent would use to answer it.
-  - *KB-driven:* walk the surveyed KB top-down, tag each section with which Level-In category it serves. Workflow.svg already provides much of this structure.
-  - *CS self-report:* ask CS agents which sources they rely on per category.
-  - Recommend `gsd-planner` propose a **hybrid** (KB-driven from Workflow.svg structure, validated by a small evidence-based sample) and ask user.
+- **D-05: Coverage measurement method — HYBRID (KB-driven + evidence sample).** Walk the surveyed KB top-down and tag each section to the Level-In category it serves (using Workflow.svg structure as the backbone), then validate with a small evidence-based sample of historical Freshdesk tickets per category. CS self-report is NOT used as a primary method in Phase 1.
 
-- **D-TBD-B: Conflict detection method** — Three viable approaches:
-  - *Manual reviewer:* read every snapshot, flag contradictions.
-  - *LLM-assisted pairwise comparison:* feed pairs of policy claims to an LLM (Sonnet 4.6) to flag contradictions; reviewer triages.
-  - *Cross-reference against real agent replies:* sample answered tickets from Freshdesk export, compare what agents actually said vs what the KB says.
-  - **Risk to address regardless of method:** Workflow.svg embeds policy thresholds (1h cancellation window, 45d warranty, 40% promo, 20% discount cap) that may contradict Confluence/Email Templates. Conflict detection MUST check this cross-source axis explicitly.
+- **D-06: Conflict detection method — LLM-ASSISTED PAIRWISE + MANUAL TRIAGE.** Feed pairs of policy claims across sources to an LLM (Sonnet 4.6) to flag contradictions; a human reviewer triages the flagged set. Cross-reference-against-real-agent-replies is NOT the primary method (kept as optional spot-check only).
+  - **MANDATORY regardless of method:** Build a **Policy-Threshold Index** capturing every embedded numeric/temporal threshold (1h cancellation window, 1h change window, 45d warranty, 40% promo, 20% discount cap, "1 note per request") with its source. Conflict detection MUST run the cross-source threshold axis explicitly (Workflow.svg ↔ Confluence ↔ Email Templates), since Workflow.svg thresholds may contradict the other sources.
 
-- **D-TBD-C: Deliverable format + tacit-knowledge scope** — Open questions:
-  - SURVEY.md alone, or SURVEY.md + structured CSV/Sheets the CS team can edit?
-  - Glossary as a separate `GLOSSARY.md` or a section in SURVEY.md?
-  - Tacit-knowledge interviews: light async questionnaire to a few seniors, structured interviews with N CS agents + ops lead, or skip in Phase 1?
+- **D-07: Deliverable format + tacit-knowledge scope — DOCS ONLY (no tacit interviews).** Produce: `SURVEY.md` (main inventory + coverage + conflict findings; append-friendly, section-keyed), a separate `GLOSSARY.md` (internal jargon → plain English, with source per term), a `CODE-MAP` (workflow code → action → linked email template; Markdown or sidecar JSON), and an editable CSV/Sheet for the coverage map that the CS team can edit. **No tacit-knowledge interviews/questionnaire in Phase 1** — tacit/missing-knowledge gaps are surfaced as explicit **action items** for the CS team, not gathered here.
 
 ### Claude's Discretion
 - Directory structure under `.planning/phases/01-knowledge-survey-conflict-inventory/snapshots/` (sub-organize by source family)
