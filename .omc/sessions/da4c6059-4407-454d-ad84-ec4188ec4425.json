@@ -1,8 +1,8 @@
 {
   "session_id": "da4c6059-4407-454d-ad84-ec4188ec4425",
-  "ended_at": "2026-05-28T01:54:47.959Z",
+  "ended_at": "2026-05-29T04:40:50.830Z",
   "reason": "other",
-  "agents_spawned": 6,
-  "agents_completed": 6,
+  "agents_spawned": 0,
+  "agents_completed": 0,
   "modes_used": []
 }
