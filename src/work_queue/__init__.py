@@ -10,6 +10,12 @@ Public API (Wave 1 — 02-03):
   - finalize_retry: token-checked retry with backoff
   - recover_stale_claims: sweep stale claimed rows back to pending
   - compute_idempotency_key: deterministic key (ticket_id:inbound_msg_id)
+
+Public API (Wave 2 — 02-04):
+  - send_reply: mode-aware send (DRY_RUN / LIVE) with send-intent transactional (fix #1)
+  - process_queue_row: full post-path pipeline with guards + redaction
+  - worker_loop: sequential worker loop (D-11)
+  - DeadLetterSink, RetryOnlyDeadLetterSink: dead-letter protocol (fix #7)
 """
 
 from src.work_queue.idempotency import compute_idempotency_key
