@@ -32,9 +32,13 @@ D-03 FINDING (why there is no marker-scan pre-send guard):
   It was removed. The residual window (POST succeeds but the process dies before the
   sent_at write commits) is a documented, narrow Phase-2 limitation — see 02-06-SUMMARY.md.
 
-PII contract (D-12):
-  Caller is responsible for redacting body before passing here.
-  dry_run_log.body stores the redacted body.
+PII contract (D-12 — enforced structurally, not by caller convention):
+  The dry_run_log persistence boundary (_dry_run) ALWAYS passes body through
+  redact_text() before the INSERT, so no raw customer-derived text can reach
+  the dry_run_log.body column regardless of what the caller passed. This makes
+  redaction a property of the persistence seam rather than a caller promise
+  (BL-04). redact_text() is idempotent on already-redacted / canned text, so
+  double-redaction is safe.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ from typing import Any
 from src.config import SendMode
 from src.freshdesk_io.client import FreshdeskClient
 from src.freshdesk_io.models import ReplyResult
+from src.guards.pii import redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +96,14 @@ async def _dry_run(
     inbound_msg_id: int,
     body: str,
 ) -> dict[str, Any]:
-    """Persist would-be reply to dry_run_log, no Freshdesk call."""
+    """Persist would-be reply to dry_run_log, no Freshdesk call.
+
+    Redaction is enforced HERE at the persistence boundary (D-12 / BL-04):
+    body is passed through redact_text() unconditionally so no raw customer
+    PII can land in dry_run_log.body even if a future caller forgets to
+    pre-redact. Idempotent on canned / already-redacted text.
+    """
+    redacted_body = redact_text(body)
     await conn.execute(
         """
         INSERT INTO queue.dry_run_log (ticket_id, inbound_msg_id, action, body)
@@ -100,7 +112,7 @@ async def _dry_run(
         ticket_id,
         inbound_msg_id,
         "reply",
-        body,
+        redacted_body,
     )
     logger.info(
         "send_dry_run",

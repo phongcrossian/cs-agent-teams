@@ -402,6 +402,61 @@ async def test_send_dry_run(clean_db, db_pool, respx_mock):
     assert log_row["body"] is not None
 
 
+async def test_dry_run_persists_redacted_body(clean_db, db_pool, respx_mock):
+    """DRY_RUN persistence boundary redacts PII before INSERT into dry_run_log (BL-04 / D-12).
+
+    Redaction must be enforced structurally at the persistence seam, not by
+    caller convention. Even when a caller passes a raw body containing an email
+    address, the persisted dry_run_log.body must NOT contain the raw PII.
+    """
+    from src.work_queue.send import send_reply
+
+    ticket_id = 250
+    inbound_msg_id = 9051
+
+    async with db_pool.acquire() as conn:
+        await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+        row = await claim_one(conn, worker_id="worker-redact")
+        assert row is not None
+        row_id = row["id"]
+        claim_token = str(row["claim_token"])
+
+    from src.freshdesk_io.client import FreshdeskClient
+    http_client = httpx.AsyncClient(base_url="https://testdomain.freshdesk.com")
+    client = FreshdeskClient(domain="testdomain", api_key="test_key", _http_client=http_client)
+
+    # Raw body with an email address — a caller forgetting to pre-redact
+    raw_email = "john.doe@example.com"
+    raw_body = f"Please refund my order, contact me at {raw_email} thanks"
+
+    async with db_pool.acquire() as conn:
+        await send_reply(
+            client=client,
+            conn=conn,
+            ticket_id=ticket_id,
+            inbound_msg_id=inbound_msg_id,
+            body=raw_body,
+            mode=SendMode.DRY_RUN,
+            row_id=row_id,
+            claim_token=claim_token,
+        )
+
+    async with db_pool.acquire() as conn:
+        persisted_body = await conn.fetchval(
+            "SELECT body FROM queue.dry_run_log WHERE ticket_id = $1", ticket_id
+        )
+
+    assert persisted_body is not None, "dry_run_log row must exist"
+    # The raw email must NOT survive to the persisted column
+    assert raw_email not in persisted_body, (
+        f"Raw PII leaked into dry_run_log.body: {persisted_body!r} (BL-04)"
+    )
+    # Redaction tag should be present
+    assert "<EMAIL_ADDRESS>" in persisted_body, (
+        f"Expected redacted EMAIL_ADDRESS tag in persisted body; got {persisted_body!r}"
+    )
+
+
 async def test_send_live(clean_db, db_pool):
     """LIVE mode: post_reply → persist sent_at + freshdesk_reply_id (fix #1, send-intent)."""
     from src.work_queue.send import send_reply

@@ -10,7 +10,8 @@ process_queue_row pipeline:
                                   - original enqueue was valid → status='stale_inbound' + alert (fix #4).
                                   - non-customer slipped through → status='suppressed' (D-08).
   4. Per-ticket throttle:       should_throttle_ticket → loop-breaker (fix #4).
-  5. PII redact:                redact_text() on body BEFORE any log/persist (D-12).
+  5. PII redact:                enforced at the persistence seam (send._dry_run
+                                redacts dry_run_log.body unconditionally — D-12 / BL-04).
   6. Canned reply body:         Phase 2 placeholder — Phase 4 replaces with real draft seam.
   7. send_reply:                mode-aware (D-05); send-intent persist (fix #1).
   8. finalize_done.
@@ -45,7 +46,6 @@ from src.freshdesk_io.errors import (
     FreshdeskTransientError,
 )
 from src.guards.loop_guard import should_suppress, should_throttle_ticket
-from src.guards.pii import redact_text
 from src.observability import emit_alert, increment
 from src.work_queue.claim import claim_one, finalize_done, finalize_retry
 from src.work_queue.dead_letter import should_dead_letter
@@ -190,9 +190,13 @@ async def process_queue_row(
                 increment("stale_inbound_total")
                 return
 
-            # ── Step 5: PII redaction (D-12) — BEFORE any log or persist ─────────
-            raw_body = target_conv.body_text if target_conv else ""
-            redacted_body = redact_text(raw_body)
+            # ── Step 5: PII redaction (D-12) — enforced at the persistence seam ──
+            # Redaction is NOT performed here on a throwaway variable (that was
+            # dead weight giving false compliance — BL-04). The dry_run_log
+            # persistence boundary in send._dry_run() redacts unconditionally, so
+            # any customer-derived body is redacted in code regardless of caller.
+            # In Phase 2 the outbound body is a canned placeholder (no customer
+            # PII), but the structural guard holds when Phase 4 wires real drafts.
 
             # ── Step 6: Canned reply body (Phase 2 placeholder) ──────────────────
             # SEAM: Phase 4 replaces this with classify → retrieve → draft pipeline.
