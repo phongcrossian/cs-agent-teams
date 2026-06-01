@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-06-01T08:16:23.735Z"
+last_updated: "2026-06-01T08:34:52.827Z"
 last_activity: 2026-06-01
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 02 (freshdesk-i-o-layer-pipeline-backbone) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-06-01
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 80%
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P02 | 20 | 2 tasks | 6 files |
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P03 | 30 | 2 tasks | 7 files |
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P04 | 90 | 3 tasks | 8 files |
+| Phase 02 P05 | 25 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase ?]: API conversations do not expose RFC 3834 email headers
 - [Phase ?]: 409 semantic deferred to 02-06 sandbox demo
 - [Phase ?]: Loop-guard single source of truth pattern established
+- [Phase ?]: resolve_inbound_and_enqueue single definition in reconcile.py; webhook imports from there
+- [Phase ?]: load_checkpoint applies safety overlap (last_since - interval) on resume to cover downtime events (fix #3, D-09)
 
 ### Pending Todos
 
@@ -125,6 +128,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-01T08:16:23.726Z
+Last session: 2026-06-01T08:34:39.809Z
 Stopped at: Completed 02-02-PLAN.md
 Resume file: None

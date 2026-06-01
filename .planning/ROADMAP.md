@@ -53,7 +53,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 02-02-PLAN.md — Freshdesk I/O client (reply public + note private, D-04) + list_updated_tickets/Ticket model + retry/Retry-After/error taxonomy (409→fatal) (D-10) (Wave 1)
 - [x] 02-03-PLAN.md — Postgres idempotency queue (`src/work_queue/`): dedup-at-insert + SKIP LOCKED claim (deterministic order) + stale recovery (D-01/D-02/D-11) (Wave 1)
 - [x] 02-04-PLAN.md — Worker assembly + unified loop-guard (D-06, should_suppress single source of truth + per-ticket throttle) + send-intent transactional/pre-send guard (exactly-once across crash) + DeadLetterSink protocol + Presidio PII redaction (D-12) + send-mode switch (D-05); D-07 sandbox verify checkpoint (Wave 2)
-- [ ] 02-05-PLAN.md — Intake: HMAC webhook receiver + reconciliation poller with durable checkpoint, both feeding the same queue via shared resolve (D-09) (Wave 3)
+- [x] 02-05-PLAN.md — Intake: HMAC webhook receiver + reconciliation poller with durable checkpoint, both feeding the same queue via shared resolve (D-09) (Wave 3)
 - [ ] 02-06-PLAN.md — Retry/dead-letter hardening (D-10, PostgresDeadLetterSink + exhausted-sweeper) + main.py wiring + sandbox e2e demo proving exactly-once incl. crash-after-post (D-03) (Wave 4)
 
 ### Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)
@@ -123,7 +123,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
-| 2. Freshdesk I/O Layer & Pipeline Backbone | 4/6 | In Progress|  |
+| 2. Freshdesk I/O Layer & Pipeline Backbone | 5/6 | In Progress|  |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 0/TBD | Not started | - |
 | 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
