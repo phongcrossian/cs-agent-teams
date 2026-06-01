@@ -30,12 +30,15 @@ def pytest_collection_modifyitems(config, items):
 
 # ── Database fixtures ─────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def db_pool():
     """asyncpg connection pool for test database.
 
     Requires DATABASE_URL env var pointing to a test Postgres instance.
     Falls back to the default docker-compose URL.
+
+    Function-scoped (not session) to avoid pytest-asyncio event-loop-scope
+    mismatch between session fixtures and function-scoped test loops.
     """
     import asyncpg
 
