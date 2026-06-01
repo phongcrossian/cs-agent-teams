@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 
 
 class SendMode(str, Enum):
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     )
 
     # Selless sync user IDs (D-07 loop-guard layer 4)
-    selless_sync_user_ids: set[int] = Field(
+    selless_sync_user_ids: Annotated[set[int], NoDecode] = Field(
         default_factory=set,
         description="Freshdesk user_ids of Selless sync integration (CSV env string parsed below)",
     )
