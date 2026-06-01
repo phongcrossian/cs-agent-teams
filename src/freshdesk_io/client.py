@@ -112,7 +112,13 @@ class FreshdeskClient:
         max_attempts: int = 5,
         _http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._domain = domain
+        # Normalize domain at the boundary: accept "sub", "sub.freshdesk.com",
+        # or a full URL. base_url below appends ".freshdesk.com", so strip any
+        # scheme and an existing ".freshdesk.com" suffix to avoid double-append.
+        normalized = domain.strip().replace("https://", "").replace("http://", "").rstrip("/")
+        if normalized.endswith(".freshdesk.com"):
+            normalized = normalized[: -len(".freshdesk.com")]
+        self._domain = normalized
         self._api_key = api_key
         self._max_attempts = max_attempts
         # Allow injection for testing; otherwise built lazily on first call
