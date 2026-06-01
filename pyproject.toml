@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grok-agent-teams"
+version = "0.1.0"
+description = "Customer Support Email Automation — Freshdesk I/O Layer & Pipeline Backbone"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi==0.136.3",
+    "uvicorn==0.48.0",
+    "httpx==0.28.1",
+    "tenacity==9.1.4",
+    "asyncpg==0.31.0",
+    "sqlalchemy==2.0.50",
+    "alembic==1.18.4",
+    "pydantic==2.13.4",
+    "pydantic-settings>=2.0.0",
+    "presidio-analyzer==2.2.359",
+    "presidio-anonymizer==2.2.362",
+    "python-dotenv==1.2.2",
+    "structlog==25.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio>=0.24.0",
+    "respx==0.23.1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "sandbox: real Freshdesk sandbox smoke tests (skipped in CI)",
+]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
