@@ -98,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-27 after initialization*
+*Last updated: 2026-06-01 — Phase 2 (Freshdesk I/O Layer & Pipeline Backbone) complete: REP-05 exactly-once intake + posting verified (live sandbox D-03).*
