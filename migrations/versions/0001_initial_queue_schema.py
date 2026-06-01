@@ -41,8 +41,8 @@ def upgrade() -> None:
         CREATE TABLE queue.ticket_queue (
             id                  BIGSERIAL PRIMARY KEY,
             idempotency_key     TEXT        NOT NULL,
-            ticket_id           INTEGER     NOT NULL,
-            inbound_msg_id      INTEGER     NOT NULL,
+            ticket_id           BIGINT      NOT NULL,
+            inbound_msg_id      BIGINT      NOT NULL,
             payload             JSONB       NOT NULL,
             status              TEXT        NOT NULL DEFAULT 'pending',
             claimed_at          TIMESTAMPTZ,
@@ -86,8 +86,8 @@ def upgrade() -> None:
         CREATE TABLE queue.dead_letter (
             id              BIGSERIAL   PRIMARY KEY,
             idempotency_key TEXT        NOT NULL,
-            ticket_id       INTEGER     NOT NULL,
-            inbound_msg_id  INTEGER     NOT NULL,
+            ticket_id       BIGINT      NOT NULL,
+            inbound_msg_id  BIGINT      NOT NULL,
             payload         JSONB       NOT NULL,
             attempts        INTEGER     NOT NULL,
             last_error      TEXT,
@@ -104,8 +104,8 @@ def upgrade() -> None:
         """
         CREATE TABLE queue.dry_run_log (
             id              BIGSERIAL   PRIMARY KEY,
-            ticket_id       INTEGER     NOT NULL,
-            inbound_msg_id  INTEGER     NOT NULL,
+            ticket_id       BIGINT      NOT NULL,
+            inbound_msg_id  BIGINT      NOT NULL,
             action          TEXT        NOT NULL,
             body            TEXT        NOT NULL,
             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
