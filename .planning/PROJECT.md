@@ -14,7 +14,7 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+- [x] Knowledge-base **inventory/survey** documents sources, formats, coverage by ticket type, conflicts, update cadence, and tacit knowledge gaps — *Validated in Phase 1: Knowledge Survey & Conflict Inventory (2026-06-01). Delivered SURVEY/GLOSSARY/CODE-MAP/POLICY-THRESHOLD-INDEX/CONFLICT-INVENTORY/COVERAGE-MAP/ACTION-ITEMS; 5 human-review items tracked in 01-HUMAN-UAT.md.*
 
 ### Active
 
@@ -26,7 +26,6 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 - [ ] AI posts the reply directly into the correct existing Freshdesk ticket via API
 - [ ] **MCP Selless** server exposes the necessary transactional reads (order status, customer info, purchase/order history) with scoped read permissions, rate limiting, and logging
 - [ ] **MCP Knowledge** server provides semantic search over a centralized knowledge base (policies, product info, prior-ticket patterns) with source citations
-- [ ] Knowledge-base **inventory/survey** documents sources, formats, coverage by ticket type, conflicts, update cadence, and tacit knowledge gaps
 - [ ] Knowledge **ingest → normalize → index** pipeline builds the centralized RAG store from Confluence + Google Sheet/Doc
 - [ ] **Offline evaluation harness** scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference answers), iterated until a defined quality bar is met
 - [ ] **Guardrails** auto-route high-risk tickets to a human agent (money-related, complaints/legal, complex/ambiguous) instead of auto-answering
