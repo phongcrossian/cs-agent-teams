@@ -267,11 +267,84 @@ async def test_stale_claim_recovery(clean_db, db_pool):
     assert active_row["status"] == "claimed", "Active (within-lease) row should remain 'claimed'"
 
 
-# ── Wave 1 (02-03): dead_letter test — still RED (implemented in 02-06) ───────
+# ── Wave 4 (02-06) dead_letter + sweep tests ─────────────────────────────────
 
 async def test_dead_letter_on_exhaustion(clean_db, db_pool):
-    """Row with attempts >= max_attempts is moved to queue.dead_letter on next failure."""
-    pytest.fail("Wave 4 (02-06): implement dead-letter on exhaustion")
+    """Row reaching max_attempts on transient error → moved to queue.dead_letter + alerted.
+
+    Scenario: row already at attempts = max_attempts - 1, receives one more transient
+    error → worker calls PostgresDeadLetterSink.to_dead_letter → row status='dead_lettered',
+    queue.dead_letter has 1 row with alerted=True.
+    """
+    from src.work_queue.worker import process_queue_row
+    from src.work_queue.dead_letter import PostgresDeadLetterSink
+    from src.freshdesk_io.client import FreshdeskClient
+    from src.freshdesk_io.errors import FreshdeskTransientError
+
+    ticket_id = 800
+    inbound_msg_id = 9010
+    max_attempts = 5
+
+    async with db_pool.acquire() as conn:
+        await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+        # Simulate row that has already attempted max_attempts - 1 times
+        await conn.execute(
+            "UPDATE queue.ticket_queue SET attempts = $1 WHERE ticket_id = $2",
+            max_attempts - 1,
+            ticket_id,
+        )
+        row = await claim_one(conn, worker_id="worker-exhausted")
+        assert row is not None
+
+    # Mock client: get_conversations returns a valid customer conv, then post_reply raises transient
+    from src.freshdesk_io.models import Conversation
+    customer_conv = Conversation(
+        id=inbound_msg_id,
+        incoming=True,
+        private=False,
+        user_id=42,
+        from_email="customer@gmail.com",
+        source=1,
+        body_text="Help with order.",
+    )
+
+    import respx as respx_lib
+    import httpx
+    with respx_lib.mock(base_url="https://testdomain.freshdesk.com", assert_all_called=False) as mock:
+        mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
+            return_value=httpx.Response(200, json=[customer_conv.model_dump()])
+        )
+        # POST raises transient error — this is the final attempt
+        mock.post(f"/api/v2/tickets/{ticket_id}/reply").mock(
+            side_effect=FreshdeskTransientError("500 internal server error")
+        )
+
+        http_client = httpx.AsyncClient(base_url="https://testdomain.freshdesk.com")
+        client = FreshdeskClient(domain="testdomain", api_key="test_key", _http_client=http_client)
+        settings = _make_settings(send_mode=SendMode.LIVE, per_ticket_reply_throttle_n=999)
+        sink = PostgresDeadLetterSink()
+
+        await process_queue_row(
+            pool=db_pool,
+            client=client,
+            row=row,
+            settings=settings,
+            dead_letter_sink=sink,
+        )
+
+    async with db_pool.acquire() as conn:
+        tq_row = await conn.fetchrow(
+            "SELECT status, attempts FROM queue.ticket_queue WHERE ticket_id = $1", ticket_id
+        )
+        dl_row = await conn.fetchrow(
+            "SELECT ticket_id, alerted FROM queue.dead_letter WHERE ticket_id = $1", ticket_id
+        )
+
+    assert tq_row["status"] == "dead_lettered", (
+        f"Exhausted row must be dead_lettered; got {tq_row['status']!r}"
+    )
+    assert dl_row is not None, "queue.dead_letter must have 1 row after exhaustion"
+    assert dl_row["alerted"] is True, "dead_letter row must be alerted=True"
 
 
 # ── Wave 2 (02-04) — send + worker tests ─────────────────────────────────────
@@ -704,11 +777,306 @@ async def test_worker_crash_after_post_does_not_resend(clean_db, db_pool):
     assert status == "done", f"After recovery, status must be 'done'; got {status!r}"
 
 
+async def test_fatal_straight_to_dead_letter(clean_db, db_pool):
+    """Fatal error (404 or 409) → dead_letter immediately, no retry (fix #5).
+
+    Attempts should NOT increment to max_attempts first — fatal = dead-letter NOW.
+    """
+    from src.work_queue.worker import process_queue_row
+    from src.work_queue.dead_letter import PostgresDeadLetterSink
+    from src.freshdesk_io.client import FreshdeskClient
+    from src.freshdesk_io.errors import FreshdeskFatalError
+    from src.freshdesk_io.models import Conversation
+
+    import respx as respx_lib
+    import httpx
+
+    for status_code, label in [(404, "404_not_found"), (409, "409_conflict")]:
+        ticket_id = 810 + status_code  # unique per iteration
+        inbound_msg_id = 9020 + status_code
+
+        async with db_pool.acquire() as conn:
+            await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+            row = await claim_one(conn, worker_id=f"worker-fatal-{label}")
+            assert row is not None
+
+        customer_conv = Conversation(
+            id=inbound_msg_id,
+            incoming=True,
+            private=False,
+            user_id=42,
+            from_email="customer@gmail.com",
+            source=1,
+            body_text="Need help.",
+        )
+
+        with respx_lib.mock(base_url="https://testdomain.freshdesk.com", assert_all_called=False) as mock:
+            mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
+                return_value=httpx.Response(200, json=[customer_conv.model_dump()])
+            )
+            mock.post(f"/api/v2/tickets/{ticket_id}/reply").mock(
+                side_effect=FreshdeskFatalError(f"HTTP {status_code}")
+            )
+
+            http_client = httpx.AsyncClient(base_url="https://testdomain.freshdesk.com")
+            client = FreshdeskClient(domain="testdomain", api_key="test_key", _http_client=http_client)
+            settings = _make_settings(send_mode=SendMode.LIVE, per_ticket_reply_throttle_n=999)
+            sink = PostgresDeadLetterSink()
+
+            await process_queue_row(
+                pool=db_pool,
+                client=client,
+                row=row,
+                settings=settings,
+                dead_letter_sink=sink,
+            )
+
+        async with db_pool.acquire() as conn:
+            tq_row = await conn.fetchrow(
+                "SELECT status, attempts FROM queue.ticket_queue WHERE ticket_id = $1", ticket_id
+            )
+            dl_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM queue.dead_letter WHERE ticket_id = $1", ticket_id
+            )
+
+        assert tq_row["status"] == "dead_lettered", (
+            f"Fatal {label}: status must be 'dead_lettered'; got {tq_row['status']!r}"
+        )
+        assert dl_count == 1, f"Fatal {label}: must have 1 dead_letter row; got {dl_count}"
+        # Fatal = dead-letter immediately, NOT after max_attempts retries
+        assert tq_row["attempts"] < 5, (
+            f"Fatal {label}: attempts must stay low (immediate DL); got {tq_row['attempts']}"
+        )
+
+
+async def test_retry_after_honored(clean_db, db_pool):
+    """FreshdeskRateLimitError(retry_after=3) → next_attempt_at ~= NOW()+3s (not exponential blind)."""
+    from src.work_queue.worker import process_queue_row
+    from src.work_queue.dead_letter import PostgresDeadLetterSink
+    from src.freshdesk_io.client import FreshdeskClient
+    from src.freshdesk_io.errors import FreshdeskRateLimitError
+    from src.freshdesk_io.models import Conversation
+    from datetime import datetime, timezone, timedelta
+    import respx as respx_lib
+    import httpx
+
+    ticket_id = 820
+    inbound_msg_id = 9030
+    retry_after_secs = 3
+
+    async with db_pool.acquire() as conn:
+        await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+        row = await claim_one(conn, worker_id="worker-ratelimit")
+        assert row is not None
+        row_id = row["id"]
+
+    customer_conv = Conversation(
+        id=inbound_msg_id,
+        incoming=True,
+        private=False,
+        user_id=42,
+        from_email="customer@gmail.com",
+        source=1,
+        body_text="Order question.",
+    )
+
+    with respx_lib.mock(base_url="https://testdomain.freshdesk.com", assert_all_called=False) as mock:
+        mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
+            return_value=httpx.Response(200, json=[customer_conv.model_dump()])
+        )
+        mock.post(f"/api/v2/tickets/{ticket_id}/reply").mock(
+            side_effect=FreshdeskRateLimitError(retry_after=retry_after_secs)
+        )
+
+        http_client = httpx.AsyncClient(base_url="https://testdomain.freshdesk.com")
+        client = FreshdeskClient(domain="testdomain", api_key="test_key", _http_client=http_client)
+        settings = _make_settings(send_mode=SendMode.LIVE, per_ticket_reply_throttle_n=999)
+        sink = PostgresDeadLetterSink()
+
+        before = datetime.now(timezone.utc)
+        await process_queue_row(
+            pool=db_pool,
+            client=client,
+            row=row,
+            settings=settings,
+            dead_letter_sink=sink,
+        )
+        after = datetime.now(timezone.utc)
+
+    async with db_pool.acquire() as conn:
+        updated = await conn.fetchrow(
+            "SELECT status, next_attempt_at FROM queue.ticket_queue WHERE id = $1", row_id
+        )
+
+    assert updated["status"] == "pending", (
+        f"RateLimit: status must be 'pending' for retry; got {updated['status']!r}"
+    )
+    # next_attempt_at must be approximately NOW() + retry_after_secs
+    # Allow ±5s margin for test execution time
+    expected_min = before + timedelta(seconds=retry_after_secs - 5)
+    expected_max = after + timedelta(seconds=retry_after_secs + 5)
+    nat = updated["next_attempt_at"]
+    assert expected_min <= nat <= expected_max, (
+        f"Retry-After honored: next_attempt_at={nat} not in range [{expected_min}, {expected_max}]"
+    )
+
+
+async def test_suppressed_not_dead_letter(clean_db, db_pool):
+    """Suppressed (stale_inbound / D-08) inbound NEVER goes to dead_letter.
+
+    Suppression is D-08 loop-guard logic; dead_letter is for actual send failures (crit #3).
+    These must NOT be conflated.
+    """
+    from src.work_queue.worker import process_queue_row
+    from src.work_queue.dead_letter import PostgresDeadLetterSink
+    from src.freshdesk_io.client import FreshdeskClient
+    from src.freshdesk_io.models import Conversation
+    import respx as respx_lib
+    import httpx
+
+    ticket_id = 830
+    inbound_msg_id = 9040
+
+    async with db_pool.acquire() as conn:
+        await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+        row = await claim_one(conn, worker_id="worker-suppress-dl")
+        assert row is not None
+
+    # Non-customer conversation → should_suppress returns True
+    suppressed_conv = Conversation(
+        id=inbound_msg_id,
+        incoming=False,   # agent reply → suppressed
+        private=False,
+        user_id=99,
+        from_email="agent@company.com",
+        source=1,
+        body_text="Agent note",
+    )
+
+    with respx_lib.mock(base_url="https://testdomain.freshdesk.com", assert_all_called=False) as mock:
+        mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
+            return_value=httpx.Response(200, json=[suppressed_conv.model_dump()])
+        )
+
+        http_client = httpx.AsyncClient(base_url="https://testdomain.freshdesk.com")
+        client = FreshdeskClient(domain="testdomain", api_key="test_key", _http_client=http_client)
+        settings = _make_settings(send_mode=SendMode.DRY_RUN, per_ticket_reply_throttle_n=999)
+        sink = PostgresDeadLetterSink()
+
+        await process_queue_row(
+            pool=db_pool,
+            client=client,
+            row=row,
+            settings=settings,
+            dead_letter_sink=sink,
+        )
+
+    async with db_pool.acquire() as conn:
+        tq_status = await conn.fetchval(
+            "SELECT status FROM queue.ticket_queue WHERE ticket_id = $1", ticket_id
+        )
+        dl_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM queue.dead_letter WHERE ticket_id = $1", ticket_id
+        )
+
+    assert tq_status in ("suppressed", "stale_inbound"), (
+        f"Suppressed conv must end up suppressed/stale_inbound; got {tq_status!r}"
+    )
+    assert dl_count == 0, (
+        f"Suppressed/stale_inbound MUST NOT go to dead_letter (D-08 vs crit#3); got {dl_count}"
+    )
+
+
 # ── Wave 4 (02-06) — still RED ────────────────────────────────────────────────
 
 async def test_sweep_exhausted_unlettered(clean_db, db_pool):
-    """Sweeper moves rows with status='pending' AND attempts>=max_attempts to dead_letter (fix #9)."""
-    pytest.fail("Wave 4 (02-06): implement sweeper for exhausted unlettered rows")
+    """Sweeper moves rows with status='pending' AND attempts>=max_attempts to dead_letter (fix #9).
+
+    Scenario: worker incremented attempts to max_attempts but crashed before dead-lettering.
+    Row is stuck as status='pending' with attempts=max_attempts (exhausted but unlettered).
+    sweep_exhausted() must find it and push to dead_letter — no silent stuck rows.
+    """
+    from src.work_queue.dead_letter import sweep_exhausted, PostgresDeadLetterSink
+
+    ticket_id = 850
+    inbound_msg_id = 9011
+    max_attempts = 5
+
+    async with db_pool.acquire() as conn:
+        await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
+        # Simulate exhausted-but-unlettered: status='pending', attempts=max_attempts
+        await conn.execute(
+            """
+            UPDATE queue.ticket_queue
+            SET attempts = $1, last_error = 'transient: repeated failures (redacted)'
+            WHERE ticket_id = $2
+            """,
+            max_attempts,
+            ticket_id,
+        )
+
+        # Verify setup: row is pending with max attempts
+        row = await conn.fetchrow(
+            "SELECT status, attempts, max_attempts FROM queue.ticket_queue WHERE ticket_id = $1", ticket_id
+        )
+        assert row["status"] == "pending"
+        assert row["attempts"] >= row["max_attempts"]
+
+    # Run sweeper
+    sink = PostgresDeadLetterSink()
+    async with db_pool.acquire() as conn:
+        swept = await sweep_exhausted(conn, sink)
+
+    assert swept == 1, f"sweep_exhausted must return 1 (one exhausted row); got {swept}"
+
+    async with db_pool.acquire() as conn:
+        tq_row = await conn.fetchrow(
+            "SELECT status FROM queue.ticket_queue WHERE ticket_id = $1", ticket_id
+        )
+        dl_row = await conn.fetchrow(
+            "SELECT ticket_id, alerted FROM queue.dead_letter WHERE ticket_id = $1", ticket_id
+        )
+
+    assert tq_row["status"] == "dead_lettered", (
+        f"Swept row must be 'dead_lettered'; got {tq_row['status']!r}"
+    )
+    assert dl_row is not None, "queue.dead_letter must have 1 row after sweep"
+    assert dl_row["alerted"] is True, "Swept dead_letter row must be alerted=True"
+
+
+async def test_main_wires_components(clean_db, db_pool):
+    """Smoke test: main module assembles all components without binding ports or making network calls."""
+    import src.main as m
+
+    # main module must expose an entry point
+    assert hasattr(m, "main") or hasattr(m, "run"), "main.py must expose main() or run() entry point"
+
+    # PostgresDeadLetterSink must be importable and usable
+    from src.work_queue.dead_letter import PostgresDeadLetterSink
+    from src.work_queue.dead_letter_sink import DeadLetterSink
+    sink = PostgresDeadLetterSink()
+    assert isinstance(sink, DeadLetterSink), "PostgresDeadLetterSink must implement DeadLetterSink protocol"
+
+    # worker_loop is importable from worker
+    from src.work_queue.worker import worker_loop
+    import inspect
+    assert inspect.iscoroutinefunction(worker_loop), "worker_loop must be a coroutine"
+
+    # sweep_exhausted is importable from dead_letter
+    from src.work_queue.dead_letter import sweep_exhausted
+    assert inspect.iscoroutinefunction(sweep_exhausted), "sweep_exhausted must be a coroutine"
+
+    # recover_stale_claims is importable
+    from src.work_queue.claim import recover_stale_claims
+    assert inspect.iscoroutinefunction(recover_stale_claims), "recover_stale_claims must be a coroutine"
+
+    # poller_loop is importable
+    from src.poller.reconcile import poller_loop
+    assert inspect.iscoroutinefunction(poller_loop), "poller_loop must be a coroutine"
+
+    # webhook app is a FastAPI app
+    from src.webhook.receiver import app
+    assert app is not None, "webhook app must be importable"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
