@@ -1,16 +1,19 @@
 """Reconciliation poller module — updated_since scan + durable checkpoint (D-09)."""
 
+from src.poller.reconcile import (
+    load_checkpoint,
+    reconcile_once,
+    save_checkpoint,
+    poller_loop,
+    resolve_inbound_and_enqueue,
+    resolve_latest_inbound_msg_id,
+)
 
-async def reconcile_once(pool, client, since: str) -> int:
-    """Stub — implemented in Wave 3 (02-05)."""
-    raise NotImplementedError("Wave 3: implement reconcile_once")
-
-
-async def load_checkpoint(conn) -> str:
-    """Stub — load last_since from queue.poller_checkpoint."""
-    raise NotImplementedError("Wave 3: implement load_checkpoint")
-
-
-async def save_checkpoint(conn, last_since: str) -> None:
-    """Stub — persist last_since to queue.poller_checkpoint."""
-    raise NotImplementedError("Wave 3: implement save_checkpoint")
+__all__ = [
+    "load_checkpoint",
+    "reconcile_once",
+    "save_checkpoint",
+    "poller_loop",
+    "resolve_inbound_and_enqueue",
+    "resolve_latest_inbound_msg_id",
+]
