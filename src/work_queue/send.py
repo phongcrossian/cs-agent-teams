@@ -12,14 +12,25 @@ DRY_RUN (default — D-05):
   action='reply', body=redacted_body).  DOES NOT call Freshdesk.
   Schema: (id, ticket_id, inbound_msg_id, action, body, created_at) — 02-01.
 
-LIVE (fix #1 — send-intent + pre-send guard):
-  1. PRE-SEND GUARD: GET /conversations → scan for system marker stamped on prior
-     outbound replies for this inbound_msg_id.  If found → SKIP (already sent).
-     This closes the residual crash-window between POST 200 and sent_at write (T-02-23).
-  2. POST /api/v2/tickets/{id}/reply with body + marker embedded.
-  3. Immediately after POST 200/201: UPDATE ticket_queue SET sent_at=NOW(),
+LIVE (fix #1 — send-intent transactional write):
+  1. POST /api/v2/tickets/{id}/reply with body.
+  2. Immediately after POST 200/201: UPDATE ticket_queue SET sent_at=NOW(),
      freshdesk_reply_id=result.id WHERE id=row_id AND claim_token=claim_token.
      This is the send-intent transactional write (REP-05).
+
+Exactly-once is enforced by three layers (NOT by a Freshdesk-side body marker):
+  - DB idempotency key (UNIQUE) — a duplicate inbound never enqueues twice (D-02);
+  - process_queue_row skip-if-sent — row.sent_at IS NOT NULL ⇒ no POST (fix #1, the
+    crash-after-post path proven on the D-03 sandbox demo);
+  - the token-checked sent_at write below — a stale worker writes nothing.
+
+D-03 FINDING (why there is no marker-scan pre-send guard):
+  An earlier design embedded an HTML-comment marker (<!-- csbot:sent:{id} -->) in the
+  reply body and scanned conversations for it to close the residual window between POST
+  200 and the sent_at write. The D-03 live sandbox demo proved Freshdesk STRIPS HTML
+  comments from reply bodies, so the marker never persists and the scan is dead weight.
+  It was removed. The residual window (POST succeeds but the process dies before the
+  sent_at write commits) is a documented, narrow Phase-2 limitation — see 02-06-SUMMARY.md.
 
 PII contract (D-12):
   Caller is responsible for redacting body before passing here.
@@ -36,22 +47,6 @@ from src.freshdesk_io.client import FreshdeskClient
 from src.freshdesk_io.models import ReplyResult
 
 logger = logging.getLogger(__name__)
-
-# ── System marker ─────────────────────────────────────────────────────────────
-# Embedded in every outbound reply body so the pre-send guard can detect
-# "this inbound_msg_id was already replied to" across crashes.
-# Format: <!-- csbot:sent:{inbound_msg_id} -->
-# (HTML comment — not visible to end users in most email clients)
-_MARKER_TEMPLATE = "<!-- csbot:sent:{inbound_msg_id} -->"
-
-
-def _make_marker(inbound_msg_id: int) -> str:
-    return _MARKER_TEMPLATE.format(inbound_msg_id=inbound_msg_id)
-
-
-def _has_marker(body: str, inbound_msg_id: int) -> bool:
-    """Return True if body contains the system marker for this inbound_msg_id."""
-    return _make_marker(inbound_msg_id) in body
 
 
 async def send_reply(
@@ -79,9 +74,8 @@ async def send_reply(
 
     Returns
     -------
-    dict {"dry_run": True}         — in DRY_RUN mode
-    dict {"skipped": "already_sent"} — in LIVE mode, pre-send guard fired
-    ReplyResult                    — in LIVE mode, after successful post
+    dict {"dry_run": True}  — in DRY_RUN mode
+    ReplyResult             — in LIVE mode, after successful post
     """
     if mode == SendMode.DRY_RUN:
         return await _dry_run(conn, ticket_id, inbound_msg_id, body)
@@ -126,30 +120,18 @@ async def _live_send(
     row_id: int,
     claim_token: str,
 ) -> dict[str, Any] | ReplyResult:
-    """Live send: pre-send guard → post_reply → persist sent_at (fix #1)."""
+    """Live send: post_reply → persist sent_at + freshdesk_reply_id (fix #1).
 
-    # ── PRE-SEND GUARD (fix #1 — close residual crash window) ────────────────
-    # Scan existing conversations for the system marker of this inbound_msg_id.
-    # If found, a previous run already POSTed the reply but crashed before
-    # finalize_done.  Skip the POST entirely.
-    conversations = await client.get_conversations(ticket_id)
-    marker = _make_marker(inbound_msg_id)
-    for conv in conversations:
-        if not conv.incoming and _has_marker(conv.body_text or "", inbound_msg_id):
-            logger.info(
-                "pre_send_guard_already_sent",
-                extra={"ticket_id": ticket_id, "inbound_msg_id": inbound_msg_id},
-            )
-            return {"skipped": "already_sent"}
+    No Freshdesk-side pre-send marker scan (D-03: Freshdesk strips HTML comments).
+    Exactly-once relies on the idempotency key, process_queue_row's skip-if-sent,
+    and the token-checked send-intent write below.
+    """
 
-    # ── POST reply (embed marker for future pre-send guard scans) ─────────────
-    body_with_marker = body + "\n" + marker
-    result: ReplyResult = await client.post_reply(ticket_id, body_with_marker)
+    result: ReplyResult = await client.post_reply(ticket_id, body)
 
     # ── SEND-INTENT: persist sent_at + freshdesk_reply_id immediately (fix #1) ─
     # Token-checked UPDATE: only updates if claim_token still matches.
-    # If a stale worker race were to occur, this silently writes nothing —
-    # the second worker's pre-send guard would catch the already-posted marker.
+    # If a stale worker race were to occur, this silently writes nothing.
     await conn.execute(
         """
         UPDATE queue.ticket_queue

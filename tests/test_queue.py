@@ -403,7 +403,7 @@ async def test_send_dry_run(clean_db, db_pool, respx_mock):
 
 
 async def test_send_live(clean_db, db_pool):
-    """LIVE mode: pre-send guard (no marker found) → post_reply → persist sent_at + freshdesk_reply_id (fix #1)."""
+    """LIVE mode: post_reply → persist sent_at + freshdesk_reply_id (fix #1, send-intent)."""
     from src.work_queue.send import send_reply
     from src.freshdesk_io.client import FreshdeskClient
 
@@ -418,11 +418,8 @@ async def test_send_live(clean_db, db_pool):
         row_id = row["id"]
         claim_token = str(row["claim_token"])
 
-    # respx mock: GET conversations (empty — no pre-existing reply) + POST reply → 201
+    # respx mock: POST reply → 201 (no conversations scan — marker pre-send guard removed, D-03)
     with respx_lib.mock(base_url="https://testdomain.freshdesk.com") as mock:
-        mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
-            return_value=httpx.Response(200, json=[])
-        )
         mock.post(f"/api/v2/tickets/{ticket_id}/reply").mock(
             return_value=httpx.Response(201, json={"id": fake_reply_id, "ticket_id": ticket_id})
         )
@@ -671,32 +668,19 @@ async def test_worker_crash_after_post_does_not_resend(clean_db, db_pool):
     from src.work_queue.dead_letter_sink import RetryOnlyDeadLetterSink
     from src.work_queue.send import send_reply
     from src.freshdesk_io.client import FreshdeskClient
-    from src.freshdesk_io.models import Conversation
 
     ticket_id = 700
     inbound_msg_id = 9006
     fake_reply_id = 11111
-
-    customer_conv = Conversation(
-        id=inbound_msg_id,
-        incoming=True,
-        private=False,
-        user_id=42,
-        from_email="customer@gmail.com",
-        source=1,
-        body_text="Need help with return.",
-    )
 
     async with db_pool.acquire() as conn:
         await enqueue_ticket(conn, ticket_id=ticket_id, inbound_msg_id=inbound_msg_id, redacted_payload={})
 
     post_call_count = 0
 
+    # No GET conversations mock: send_reply no longer scans (marker pre-send guard removed,
+    # D-03), and the recovered row's skip-if-sent (sent_at set) returns before any worker fetch.
     with respx_lib.mock(base_url="https://testdomain.freshdesk.com") as mock:
-        # GET conversations for pre-send guard + worker fetch
-        mock.get(f"/api/v2/tickets/{ticket_id}/conversations").mock(
-            return_value=httpx.Response(200, json=[customer_conv.model_dump()])
-        )
         # POST reply → 201 (should only be called once)
         def post_side_effect(request):
             nonlocal post_call_count
