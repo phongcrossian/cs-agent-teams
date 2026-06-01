@@ -18,6 +18,14 @@ Tests:
   test_sandbox_real_reply          — posts a canned reply to real Freshdesk ticket, verifies it appears
   test_sandbox_retry_no_double_send — re-run same inbound → no second reply (exactly-once D-02)
   test_sandbox_crash_after_post_no_resend — mocked crash after POST 200 → re-claim → no resend (fix #1)
+
+D-03 FINDING — Marker-based verification removed:
+  Freshdesk STRIPS HTML comments from reply bodies (verified on shophelp-dev, ticket 368108).
+  An earlier design searched for <!-- csbot:sent:{inbound_msg_id} --> in c.body to verify
+  exactly-once. Since the marker never persists through Freshdesk, this approach was abandoned.
+  Verification now uses the freshdesk_reply_id returned by send_reply (result.id):
+    - Assert exactly one conversation whose id == freshdesk_reply_id exists.
+  The Conversation model does NOT expose a `body` field — do not reference it.
 """
 
 from __future__ import annotations
@@ -30,7 +38,6 @@ import pytest
 
 from src.config import SendMode, Settings
 from src.freshdesk_io.client import FreshdeskClient
-from src.freshdesk_io.models import Conversation
 from src.work_queue.claim import claim_one, finalize_done, recover_stale_claims
 from src.work_queue.dead_letter import PostgresDeadLetterSink
 from src.work_queue.enqueue import enqueue_ticket
@@ -74,9 +81,10 @@ async def test_sandbox_real_reply():
     via the Freshdesk API.
 
     Assertions:
-    - POST /api/v2/tickets/{id}/reply returns 201 with a freshdesk_reply_id
-    - GET /api/v2/tickets/{id}/conversations returns a new conversation containing
-      the reply body + system marker (exactly-once marker)
+    - POST /api/v2/tickets/{id}/reply returns 201 with a freshdesk_reply_id (result.id)
+    - GET /api/v2/tickets/{id}/conversations returns exactly one conversation whose
+      id == freshdesk_reply_id (proves the reply posted; body/marker not checked —
+      Freshdesk strips HTML comments, D-03 finding)
     - queue.ticket_queue row status='done', sent_at IS NOT NULL, freshdesk_reply_id matches
     """
     ticket_id = _get_sandbox_ticket_id()
@@ -159,16 +167,14 @@ async def test_sandbox_real_reply():
             f"DB freshdesk_reply_id mismatch: {db_row['freshdesk_reply_id']} != {freshdesk_reply_id}"
         )
 
-        # Verify: the reply appears in Freshdesk conversations
+        # Verify: the reply appears in Freshdesk conversations by freshdesk_reply_id.
+        # NOTE: Freshdesk strips HTML comments, so marker-based lookup is not used (D-03 finding).
+        # Instead verify by conversation id == freshdesk_reply_id (exactly one such conversation).
         updated_convs = await client.get_conversations(ticket_id)
-        marker = f"<!-- csbot:sent:{inbound_msg_id} -->"
-        outbound_replies = [
-            c for c in updated_convs
-            if not c.incoming and marker in (c.body_text or "")
-        ]
-        assert outbound_replies, (
-            f"Expected to find our reply (with marker {marker!r}) in ticket {ticket_id} conversations. "
-            "Check the Freshdesk sandbox UI to confirm the reply was posted."
+        our_replies = [c for c in updated_convs if c.id == freshdesk_reply_id]
+        assert len(our_replies) == 1, (
+            f"Expected exactly 1 conversation with id={freshdesk_reply_id} in ticket {ticket_id}; "
+            f"found {len(our_replies)}. Check the Freshdesk sandbox UI to confirm the reply posted."
         )
 
         print(f"\n[D-03 PASS] Reply posted to ticket {ticket_id}, freshdesk_reply_id={freshdesk_reply_id}")
@@ -190,7 +196,8 @@ async def test_sandbox_retry_no_double_send():
 
     Assertions:
     - Second enqueue_ticket() call returns False (duplicate)
-    - Freshdesk conversation count does NOT increase after second run attempt
+    - Freshdesk has exactly 1 conversation with id == first_freshdesk_reply_id after second run
+      (no body/marker check — Freshdesk strips HTML comments, D-03 finding)
     """
     ticket_id = _get_sandbox_ticket_id()
     pool = await _make_sandbox_pool()
@@ -236,7 +243,7 @@ async def test_sandbox_retry_no_double_send():
         )
 
         async with pool.acquire() as conn:
-            await send_reply(
+            first_result = await send_reply(
                 client=client,
                 conn=conn,
                 ticket_id=ticket_id,
@@ -247,6 +254,10 @@ async def test_sandbox_retry_no_double_send():
                 claim_token=claim_token,
             )
             await finalize_done(conn, row_id=row_id, claim_token=claim_token)
+
+        # Capture the freshdesk_reply_id from the first (and only) send
+        first_freshdesk_reply_id = first_result.id if hasattr(first_result, "id") else first_result.get("id")
+        assert first_freshdesk_reply_id, "First send must return a freshdesk_reply_id"
 
         # ── Second enqueue attempt (same inbound_msg_id) ──────────────────────
         async with pool.acquire() as conn:
@@ -260,17 +271,19 @@ async def test_sandbox_retry_no_double_send():
             "Second enqueue with same inbound_msg_id must be rejected (ON CONFLICT DO NOTHING)"
         )
 
-        # ── Verify conversation count did NOT increase ─────────────────────────
+        # ── Verify: exactly 1 conversation with first_freshdesk_reply_id ─────────
+        # NOTE: Freshdesk strips HTML comments so marker-based lookup is not used (D-03 finding).
+        # Verify by conversation id — proves exactly one reply was posted.
         updated_convs = await client.get_conversations(ticket_id)
-        marker = f"<!-- csbot:sent:{inbound_msg_id} -->"
-        our_replies = [c for c in updated_convs if not c.incoming and marker in (c.body_text or "")]
+        our_replies = [c for c in updated_convs if c.id == first_freshdesk_reply_id]
         assert len(our_replies) == 1, (
-            f"Exactly-once: expected exactly 1 reply with marker; found {len(our_replies)}"
+            f"Exactly-once: expected exactly 1 conversation with id={first_freshdesk_reply_id}; "
+            f"found {len(our_replies)}"
         )
 
         print(
             f"\n[REP-05 PASS] Exactly-once confirmed: 1 reply in ticket {ticket_id}, "
-            f"second enqueue rejected, conversation count stable."
+            f"freshdesk_reply_id={first_freshdesk_reply_id}, second enqueue rejected."
         )
 
     finally:
@@ -283,7 +296,7 @@ async def test_sandbox_retry_no_double_send():
 async def test_sandbox_crash_after_post_no_resend():
     """Simulate crash after POST 200 but before finalize_done → re-claim → NO second POST.
 
-    This proves fix #1 (send-intent + pre-send guard) prevents duplicate sends across
+    This proves fix #1 (send-intent + skip-if-sent guard) prevents duplicate sends across
     process crashes — the hardest path in REP-05 crit #2.
 
     Scenario:
@@ -295,7 +308,8 @@ async def test_sandbox_crash_after_post_no_resend():
     6. Conversation count in Freshdesk == 1 (not 2).
 
     Assertions:
-    - Freshdesk POST called exactly once (checked via conversation count + marker count)
+    - Freshdesk POST called exactly once (verified via exactly 1 conversation with
+      id == freshdesk_reply_id — no body/marker check; Freshdesk strips HTML comments, D-03 finding)
     - Final queue.ticket_queue status == 'done'
     - No extra reply in Freshdesk conversation list
     """
@@ -352,6 +366,9 @@ async def test_sandbox_crash_after_post_no_resend():
                 claim_token=claim_token,
             )
         # sent_at is now persisted; row is still 'claimed' (no finalize_done called)
+        # Capture freshdesk_reply_id for later verification
+        freshdesk_reply_id = result.id if hasattr(result, "id") else result.get("id")
+        assert freshdesk_reply_id, "send_reply must return a freshdesk_reply_id on LIVE send"
 
         # Verify sent_at was persisted
         async with pool.acquire() as conn:
@@ -404,18 +421,21 @@ async def test_sandbox_crash_after_post_no_resend():
             f"After recovery, status must be 'done'; got {final_row['status']!r}"
         )
 
-        # ── Step 5: Verify Freshdesk — exactly 1 reply with our marker ────────
+        # ── Step 5: Verify Freshdesk — exactly 1 conversation with freshdesk_reply_id ──
+        # NOTE: Freshdesk strips HTML comments so marker-based lookup is not used (D-03 finding).
+        # Verify by conversation id: exactly 1 conversation with id == freshdesk_reply_id proves
+        # the reply was posted once (not twice — fix #1 skip-if-sent path worked).
         final_convs = await client.get_conversations(ticket_id)
-        marker = f"<!-- csbot:sent:{inbound_msg_id} -->"
-        our_replies = [c for c in final_convs if not c.incoming and marker in (c.body_text or "")]
+        our_replies = [c for c in final_convs if c.id == freshdesk_reply_id]
         assert len(our_replies) == 1, (
-            f"Crash-after-post fix #1: expected exactly 1 reply in Freshdesk; "
-            f"found {len(our_replies)} (would be 2 if pre-send guard or skip-if-sent failed)"
+            f"Crash-after-post fix #1: expected exactly 1 conversation with "
+            f"id={freshdesk_reply_id} in Freshdesk; found {len(our_replies)} "
+            f"(would be 2 if skip-if-sent guard failed)"
         )
 
         print(
             f"\n[fix #1 PASS] crash-after-post exactly-once: ticket {ticket_id}, "
-            f"inbound_msg_id={inbound_msg_id}, exactly 1 reply in Freshdesk."
+            f"freshdesk_reply_id={freshdesk_reply_id}, exactly 1 reply in Freshdesk."
         )
 
     finally:
