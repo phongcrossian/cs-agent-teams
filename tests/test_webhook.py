@@ -46,6 +46,20 @@ def test_hmac_verify_rejects_bad_sig():
     assert verify_signature(body, "", secret) is False
 
 
+def test_hmac_verify_malformed_returns_false_not_raises():
+    """A non-ASCII / malformed signature header must yield False, never raise (BL-03).
+
+    compare_digest raises TypeError on non-ASCII str operands; verify_signature
+    must catch this and return False so the receiver returns 401, not 500.
+    """
+    secret = b"my-secret-key"
+    body = b'{"ticket":{"id":123}}'
+    # Non-ASCII header value — would crash hmac.compare_digest if unguarded
+    assert verify_signature(body, "déadbéef ", secret) is False
+    # Odd-length / non-hex garbage
+    assert verify_signature(body, "zzz", secret) is False
+
+
 @pytest.mark.asyncio
 async def test_enqueue_on_webhook(clean_db, db_pool, respx_mock):
     """POST /webhook/freshdesk with valid sig → resolve → enqueue with real key "123:456"."""
@@ -194,3 +208,46 @@ async def test_webhook_rejects_unsigned(clean_db, db_pool):
         )
 
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_webhook_malformed_signature_returns_401_not_500(clean_db, db_pool):
+    """Malformed signature header → 401, never an unhandled 500 (BL-03).
+
+    Before the fix, hmac.compare_digest raised TypeError on a non-ASCII signature
+    operand, propagating out of verify_signature into the endpoint as a 500. The
+    contract (T-02-15) requires a bad/malformed signature to be rejected with 401.
+
+    Note: a genuinely non-ASCII header value is rejected by the HTTP client/wire
+    layer before it ever reaches the app, so the over-the-wire malformed-signature
+    case is an ASCII-but-invalid digest (wrong length / non-hex garbage). The
+    direct non-ASCII guard on verify_signature is proven by
+    test_hmac_verify_malformed_returns_false_not_raises.
+    """
+    from httpx import AsyncClient
+    from src.webhook.receiver import app
+
+    import os
+    os.environ["WEBHOOK_SECRET"] = "test-secret"
+    os.environ["FRESHDESK_DOMAIN"] = "testdomain"
+    os.environ["FRESHDESK_API_KEY"] = "test-api-key"
+
+    payload = {"ticket": {"id": 222}}
+    body = json.dumps(payload).encode()
+
+    async with AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        resp = await client.post(
+            "/webhook/freshdesk",
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                # Malformed (non-hex, odd-length) signature — must not 500
+                "X-Freshdesk-Signature": "not-a-valid-hex-digest!!",
+            },
+        )
+
+    assert resp.status_code == 401, (
+        f"Malformed signature must yield 401, not {resp.status_code} (BL-03)"
+    )
