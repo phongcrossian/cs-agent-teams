@@ -935,21 +935,25 @@ async def send_reply(
    - What we know: `incoming=False` filter sẽ bỏ qua agent/AI replies; nhưng Selless sync có thể tạo `incoming=True` fake customer replies
    - What's unclear: User ID của Selless sync integration agent trên Freshdesk sandbox account cụ thể
    - Recommendation: Kiểm tra qua sandbox ngay đầu Phase 2 — gọi GET /conversations sau khi Selless sync tạo update, log `user_id` và `from_email`
+   - **(RESOLVED: handled by 02-04 Task 3 `checkpoint:human-verify`. Loop-guard layer 4 (`is_selless_sync`) ships với source/actor user_id-whitelist làm default code path; checkpoint chỉ CONFIRM trên sandbox. Nếu source/actor không phân biệt được → marker/tag fallback (deferred CONTEXT idea) kích hoạt như follow-up, KHÔNG block Wave 3 — xem 02-04 Task 3 wave note.)**
 
 2. **Freshdesk raw email headers qua API**
    - What we know: Freshdesk lưu inbound email headers nội bộ
    - What's unclear: API v2 có expose raw email headers (Auto-Submitted, Precedence, List-*) trong conversation/ticket response không
    - Recommendation: Kiểm tra GET /api/v2/tickets/{id} response để xem có `email_config_id` hay raw headers field
+   - **(RESOLVED: loop-guard layer 1 (`is_auto_reply_by_headers` trong 02-04 Task 1) degrade gracefully khi headers=None — per Assumption A4. Nếu API không expose raw headers, layers 2–4 (sender pattern + incoming/private + Selless-sync) vẫn chặn auto-reply. Khả năng expose headers được xác nhận tại resolve-step của 02-05 khi gọi GET /conversations.)**
 
 3. **Webhook payload template cụ thể cần config**
    - What we know: Freshdesk webhook payload là configurable template
    - What's unclear: Minimum fields cần include; có include conversation data không
    - Recommendation: Document sandbox webhook config exact template trong Wave 0 setup task
+   - **(RESOLVED: minimum payload field = `ticket.id` only — webhook KHÔNG cần conversation body vì 02-05 resolve-step fetch `GET /conversations` để lấy latest inbound message id trước khi enqueue (Pitfall 1). Webhook payload template được document trong 02-01 README/setup + xác nhận tại 02-06 Task 3 sandbox demo.)**
 
 4. **Per-endpoint sub-limits cho reply endpoint**
    - What we know: Enterprise plan = 700/min global; nhưng có per-endpoint sub-limits
    - What's unclear: Exact sub-limit cho POST /reply endpoint
    - Recommendation: Test bằng cách gửi rapid requests vào sandbox; hoặc contact Freshdesk support
+   - **(RESOLVED: handled by generic Retry-After/backoff path trong 02-02 (`parse_retry_after` + tenacity wait honor `Retry-After`) và 02-06 Task 1 (`test_retry_after_honored`). Bất kể sub-limit cụ thể, 429 trả `Retry-After` được honor; exact sub-limit verify trên sandbox tại 02-06 Task 3 — không phải blocker vì backoff path là endpoint-agnostic.)**
 
 ---
 
