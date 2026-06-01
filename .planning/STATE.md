@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-06-01T06:53:29.430Z"
+last_updated: "2026-06-01T07:06:48.980Z"
 last_activity: 2026-06-01
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 6
+  completed_plans: 7
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 02 (freshdesk-i-o-layer-pipeline-backbone) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-06-01
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████░░░░] 60%
 | Phase 01-knowledge-survey-conflict-inventory P02 | 10m | 3 tasks | 21 files |
 | Phase 02 P01 | 25m | 3 tasks | 23 files |
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P02 | 20 | 2 tasks | 6 files |
+| Phase 02-freshdesk-i-o-layer-pipeline-backbone P03 | 30 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase ?]: schema queue isolates queue tables from public; src/work_queue avoids stdlib shadow; SendMode.DRY_RUN default per D-05
 - [Phase ?]: 409 classified FreshdeskFatalError (dead-letter) until sandbox verify 02-06 — fix review #5
 - [Phase ?]: list_updated_tickets pagination via page++ until empty page (simpler than Link header, sufficient for this volume)
+- [Phase ?]: pytest-asyncio 1.4: function scope for db_pool fixes session/function loop mismatch
+- [Phase ?]: asyncpg JSONB requires json.dumps() + explicit ::jsonb cast (not raw dict)
 
 ### Pending Todos
 
@@ -117,6 +120,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-01T06:53:29.420Z
+Last session: 2026-06-01T07:06:42.256Z
 Stopped at: Completed 02-02-PLAN.md
 Resume file: None
