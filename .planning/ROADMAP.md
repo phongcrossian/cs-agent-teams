@@ -48,7 +48,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The system can post a reply into the correct existing ticket via the Freshdesk API, and a retried or duplicate inbound never produces a second send (idempotency key per inbound)
   3. The client honors Freshdesk rate limits (backoff/jitter, `Retry-After`) and routes repeated failures to a dead-letter path for a human instead of dropping silently
   4. Auto-generated / no-reply / mailer-daemon mail and synced ticket updates are detected and never trigger an auto-reply loop
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 02-01-PLAN.md — Wave 0 bootstrap: uv project + docker-compose Postgres 16 + Alembic queue/dead-letter schema + test scaffolding + Presidio backend (Wave 0)
+- [ ] 02-02-PLAN.md — Freshdesk I/O client (reply public + note private, D-04) + retry/Retry-After/error taxonomy (D-10) (Wave 1)
+- [ ] 02-03-PLAN.md — Postgres idempotency queue: dedup-at-insert + SKIP LOCKED claim + stale recovery (D-01/D-02/D-11) (Wave 1)
+- [ ] 02-04-PLAN.md — Worker assembly + 4-layer loop-guard (D-06) + Presidio PII redaction (D-12) + send-mode switch (D-05); D-07 sandbox verify checkpoint (Wave 2)
+- [ ] 02-05-PLAN.md — Intake: HMAC webhook receiver + reconciliation poller, both feeding the same queue (D-09) (Wave 2)
+- [ ] 02-06-PLAN.md — Retry/dead-letter hardening (D-10) + main.py wiring + sandbox e2e demo proving exactly-once (D-03) (Wave 3)
 
 ### Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)
 **Goal**: Build the two separate grounding surfaces the drafter relies on — a transactional Selless MCP for scoped lookup-by-ID reads and a Knowledge MCP serving cited semantic search over an ingested, conflict-aware RAG store — so the orchestrator never reads source systems directly.
@@ -117,7 +123,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
-| 2. Freshdesk I/O Layer & Pipeline Backbone | 0/TBD | Not started | - |
+| 2. Freshdesk I/O Layer & Pipeline Backbone | 0/6 | Planned | - |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 0/TBD | Not started | - |
 | 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
