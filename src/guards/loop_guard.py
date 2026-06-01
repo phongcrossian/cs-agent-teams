@@ -122,10 +122,30 @@ def is_agent_or_system_message(conv: Conversation) -> bool:
 def is_selless_sync(conv: Conversation, selless_sync_user_ids: frozenset[int]) -> bool:
     """Return True if conversation was created by a known Selless-sync integration user.
 
-    D-07 primary path: user_id whitelist (LOW confidence — A2; verified at Task 3 checkpoint).
+    D-07 primary path: user_id whitelist.
+
+    SANDBOX VERIFIED (Task 3 checkpoint — 2026-06-01):
+      - API-originated / integration conversations carry a STABLE, populated user_id
+        (observed user_id=60006429889 for the API agent user in shophelp-dev sandbox,
+        ticket 368108 — probe note created then deleted, sandbox left clean).
+      - The mechanism is CONFIRMED SOUND: incoming=false + stable user_id is the
+        correct signal for Selless-sync (or any integration-originated) messages.
+      - FOLLOW-UP REQUIRED (config/data, NOT a code gate): The SPECIFIC Selless
+        integration user_id must be captured from a real Selless→Freshdesk sync event
+        and added to SELLESS_SYNC_USER_IDS in config/.env.  Do NOT hardcode
+        60006429889 — that is the sandbox API agent user, not the Selless service
+        account.  Treat the whitelist as config-driven (environment variable).
+      - raw_headers_exposed=False: GET /api/v2/tickets/{id}/conversations does NOT
+        expose email_headers / Auto-Submitted / Precedence / List-* via the API.
+        Layer 1 (RFC 3834 headers) is therefore only available from the webhook
+        payload; the worker/resolve paths must NOT depend on raw headers from
+        API-fetched conversations.  This matches the conservative-safe assumption
+        already coded (A4 degrade-gracefully).
+      - 409 observation: not reproduced in sandbox; classified FreshdeskFatalError
+        (dead-letter) until a future sandbox reproduction in 02-06 demo.
 
     This function is factored out (not inlined) so that a marker/tag fallback
-    can replace it if the sandbox checkpoint confirms user_id is not distinguishable.
+    can replace it if a future scenario requires it.
     The fallback (deferred CONTEXT idea) stamps a private marker on outbound replies
     and checks for it in layer 4 — no other code changes needed.
     """
