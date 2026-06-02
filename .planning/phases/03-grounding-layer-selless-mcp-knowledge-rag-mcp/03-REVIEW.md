@@ -44,7 +44,7 @@ findings:
   warning: 8
   info: 6
   total: 16
-status: issues_found
+status: blockers_resolved
 ---
 
 # Phase 3: Code Review Report
@@ -81,7 +81,10 @@ generic Presidio pass that may miss order codes/IDs; SVG/PDF extraction silently
 
 ## Critical Issues
 
-### CR-01: D-14 override resolution is dead code on real ingested data
+### CR-01: D-14 override resolution is dead code on real ingested data — RESOLVED (2026-06-02)
+
+**Resolution commit:** `e2619b0` `fix(03): CR-01 — wire D-14 override to real ingest data via Citation.conflict_id`
+**Resolution summary:** Added `Citation.conflict_id` field; added `_PROSE_CONFLICT_MAP` in `sources.py` mapping prose source filenames to CONTRA-* IDs; `ingest_all()` carries `conflict_id` into `kb_chunk.metadata` JSONB; `assemble_citations()` reads it from metadata; `_extract_conflict_ids()` reads `c.conflict_id` directly. False-green tests replaced with four integration tests driving the override through real pipeline-shaped DB rows. All 144 tests pass (4 sandbox skipped).
 
 **File:** `src/knowledge_mcp/conflict.py:61-79`, `126-153`; `src/ingest/pipeline.py:185-209`
 **Issue:**
@@ -139,7 +142,10 @@ Then ingest must actually write `metadata={"conflict_id": ...}` for chunks tied 
 Add an integration test that ingests real snapshots and asserts `resolved_by_override=True`
 after seeding a `policy_resolution` row — not a hand-built `conflict:` snapshot_version.
 
-### CR-02: AuditMiddleware silently drops the audit row on any write failure — audit trail is not guaranteed
+### CR-02: AuditMiddleware silently drops the audit row on any write failure — audit trail is not guaranteed — RESOLVED (2026-06-02)
+
+**Resolution commit:** `c19f99e` `fix(03): CR-02 — audit trail fail-closed; pool-unset is explicit not silent`
+**Resolution summary:** Removed try/except around `conn.execute` — INSERT failures now propagate as exceptions. Pool-unset path now raises `RuntimeError` unless `_audit_test_bypass=True` (test-only flag). `set_audit_pool()` gains `_test_bypass` kwarg (default False). `assert_audit_pool_configured()` added for server startup enforcement. `AuditMiddleware` finallyblock lets `_write_audit_row` exceptions propagate (fail-closed). Two new tests: `test_audit_fail_closed_on_insert_error` and `test_audit_fail_closed_no_pool_production_mode`. WR-01 partially addressed: caller now extracted from `context.client_id`. All 144 tests pass.
 
 **File:** `src/selless_mcp/audit.py:101-118`, `134-165`
 **Issue:**
