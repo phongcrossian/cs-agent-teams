@@ -195,12 +195,17 @@ def apply_ticket_history_whitelist(raw: dict[str, Any]) -> TicketHistory:
 
     Explicit field extraction — NEVER **raw spread.
     """
+    # status and source may be int (Freshdesk codes) or str — normalise to str
+    raw_status = raw.get("status")
+    raw_source = raw.get("source")
+    # Prefer string keys from Selless TicketViewModel; int codes from Freshdesk
+    created = raw.get("created") or raw.get("created_at")
     return TicketHistory(
         rootcause=raw.get("rootcause"),
         customer_feedback=raw.get("customer_feedback"),
         customer_request=raw.get("customer_request"),
-        status=raw.get("status"),
-        source=raw.get("source"),
-        created=raw.get("created"),
+        status=str(raw_status) if raw_status is not None else None,
+        source=str(raw_source) if raw_source is not None else None,
+        created=created,
         # DENY: agent, agent_id — silently dropped (not referenced above)
     )
