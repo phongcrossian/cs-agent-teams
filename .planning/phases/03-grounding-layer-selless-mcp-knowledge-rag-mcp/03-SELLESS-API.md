@@ -56,7 +56,7 @@ The `/public/tickets` surface only exposes the `ticket-do` **mapping** (order �
 - `PoViewModel.handling_fee` — internal economics (review).
 
 **ALLOW (needed to answer a reply):**
-- Order: `PoViewModel.{id, code, status (ACTIVE/PENDING/CANCELLED/CLOSED/VALIDATING), created, amount, items_amount, tax_amount, discount, shipping, note?, closed_reason}`, `shipping_address`/`billing_address` (`address.{address1,2, city, state, country, postal_code, first_name, last_name, email, phone}`), `product.{id,name,code,line,family}`.
+- Order: `PoViewModel.{id, code, status (ACTIVE/PENDING/CANCELLED/CLOSED/VALIDATING), created, amount, items_amount, tax_amount, discount, shipping, closed_reason}`, `shipping_address`/`billing_address` (`address.{address1,2, city, state, country, postal_code, first_name, last_name, email, phone}`), `product.{id,name,code,line,family}`. **(`note` is DENIED — see deny-list; it is an internal ops memo field, not customer-facing.)**
 - DO/fulfillment: `DoViewModel.{id, code, status, odo_status (NEW/PROCESSING/TA/TO/INUS/DELIVERED/CLOSED/CANCELLED/PENDING), status_date_*, trackings, failed_reason, product_label, urgent}`.
 - Customer: `CustomerViewModel.{id, first_name, last_name, full_name, email, phone, email_status, phone_status}`.
 - Refund/dispute/irreplaceable: as returned (minus payload).
@@ -68,10 +68,10 @@ The `/public/tickets` surface only exposes the `ticket-do` **mapping** (order �
 
 ## 5. Open Decisions for Planning
 
-**Q1 — Prior ticket history source (D-05).** Content is at non-public `po/{id}/tickets`; `/public` only has `ticket-do` mapping. Options:
-- (A) Also wrap non-public `GET /admin/csm/order/po/{id}/tickets` in the Selless client (confirm gateway access).
-- (B) Use `ticket-do` mapping → fd_ticket_id → fetch content from **Freshdesk** (Phase-2 client already exists). Splits ticket reads off Selless (counter to original D-05).
-- (C) Defer SEL-03 ticket-history content to a follow-up; Phase 3 ships order/customer/refund/dispute only.
+**Q1 — Prior ticket history source (D-05). — RESOLVED 2026-06-02 → Option B, full in Phase 3.** Content is at non-public `po/{id}/tickets`; `/public` only has `ticket-do` mapping. **Decision:** Phase 3 ships a full `get_ticket_history(order_id)` tool that uses `ticket-do` mapping → `fd_ticket_id` → the existing **Phase-2 Freshdesk client** to fetch prior-ticket content, then whitelists the fields. SEL-03 fully satisfied within Phase 3; source of content = Freshdesk; composition lives inside the Selless MCP tool.
+- ~~(A) Wrap non-public `po/{id}/tickets`~~ — not chosen (avoid non-public endpoint dependency).
+- **(B) ✅ ticket-do → fd_ticket_id → Freshdesk (Phase-2 client) — CHOSEN.**
+- ~~(C) Defer content to follow-up~~ — not chosen.
 
 **Q2 — Free-text search vs D-03.** `po/search` is genuinely free-text cross-customer. D-03 forbids exposing that at the MCP. Options:
 - (A) Don't expose search at all; MCP exposes only keyed `get_order(id)` / `get_customer(id)`. (But then how does Phase 4 resolve email→order id? The human `code` like `25044-67` still needs `po/search` to get the internal `id`.)

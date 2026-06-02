@@ -437,19 +437,16 @@ def lookup_threshold(threshold_id: str) -> ThresholdResult:
 | A5 | FastMCP per-tool rate limiting needs a thin custom middleware (built-in is server-wide) | Pitfall 3 | LOW — MVP can ship server-wide bucket |
 | A6 | Snapshot prose (SVG/PDF) is extractable to usable text for chunking | Ingest | LOW-MEDIUM — thresholds already de-risked via D-10 structured tables |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Selless API surface (endpoints/auth/field shapes) — THE #1 risk (D-01/D-05).**
+1. **Selless API surface (endpoints/auth/field shapes) — THE #1 risk (D-01/D-05). — RESOLVED 2026-06-02: see `03-SELLESS-API.md`.**
    - What we know: internal proprietary platform, "built for the platform not for AI", scattered; no public docs (web search found only unrelated Selldone/Selly).
    - What's unclear: base URL, auth model (key? OAuth? session?), endpoint paths, response shapes, whether ticket history is exposed, rate limits, pagination.
-   - Recommendation: **Defer all concrete endpoint wiring to user-supplied API docs.** Build `SellessClient` Protocol + `MockSellessClient` (fixtures) now; `HttpSellessClient` with paths as `# TODO from docs` config. Plan a `checkpoint:human-verify` task that ingests user docs and fills the seam. Everything testable (tools, whitelist, scope, audit, rate-limit) is built against the mock.
+   - **RESOLVED:** User supplied the live OpenAPI + source. Confirmed: base URL `https://api.selless.dev/admin/csm/order`, **no API auth (network/gateway trust)**, the `/public/tickets` keyed GET endpoints, concrete DTO schemas, and the D-04 whitelist. Ticket-history *content* is NOT on the public surface → split per D-05 (mapping via Selless, content via Phase-2 Freshdesk client). Full detail in `03-SELLESS-API.md`. `MockSellessClient` fixtures derive from the confirmed live JSON; `HttpSellessClient` live wiring sits behind a human-verify checkpoint.
 
-2. **Voyage API key + cost at ingest scale.**
-   - What we know: KB is small (thousands of chunks) — one-time/occasional embed cost is negligible.
-   - Recommendation: add `voyage_api_key` to config; ingest is offline/batch so no hot-path latency concern.
+2. **Voyage API key + cost at ingest scale. — RESOLVED:** add `voyage_api_key` to config; ingest is offline/batch so no hot-path latency concern. KB is small (thousands of chunks) — embed cost negligible.
 
-3. **Per-tool vs server-wide rate limits (D-08, discretion).**
-   - Recommendation: MVP server-wide token bucket; note per-tool refinement as a follow-up.
+3. **Per-tool vs server-wide rate limits (D-08, discretion). — RESOLVED:** MVP server-wide token bucket at the MCP boundary; per-tool refinement noted as a follow-up.
 
 ## Environment Availability
 

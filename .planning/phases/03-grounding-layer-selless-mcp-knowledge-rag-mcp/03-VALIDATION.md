@@ -1,8 +1,8 @@
 ---
 phase: 03
 slug: grounding-layer-selless-mcp-knowledge-rag-mcp
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-02
 ---
