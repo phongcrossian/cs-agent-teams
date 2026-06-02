@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-06-02T03:45:06.597Z"
+stopped_at: "Completed 03-01-PLAN.md — KB ingest pipeline (29 tests GREEN)"
+last_updated: "2026-06-02T06:52:00.000Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 15
-  completed_plans: 11
-  percent: 29
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 03 (grounding-layer-selless-mcp-knowledge-rag-mcp) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-06-02
 
-Progress: [███████░░░] 73%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [███████░░░] 73%
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P04 | 90 | 3 tasks | 8 files |
 | Phase 02 P05 | 25 | 2 tasks | 7 files |
 | Phase 02-freshdesk-i-o-layer-pipeline-backbone P06 | 120 | 3 tasks | 7 files |
+| Phase 03-grounding-layer-selless-mcp-knowledge-rag-mcp P01 | 35 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Recent decisions affecting current work:
 - [02-06]: Freshdesk strips HTML comments from reply bodies (D-03 live finding, ticket 368108) — HTML-comment marker pre-send guard removed; exactly-once rests on idempotency key + skip-if-sent + token-checked sent_at write
 - [02-06]: Residual window (POST 200 before sent_at write commits) accepted as documented Phase-2 limitation — no customer-visible marker; Phase 6 kill-switch is next control point
 - [02-06]: 409 confirmed FreshdeskFatalError → dead-letter immediately after sandbox demo; semantic reclassify deferred pending future evidence
+- [03-01]: content_hash keyed on sha256(source+body) — unique per source+content; changing either triggers re-embed
+- [03-01]: inspect.isawaitable() bridges sync stub_embedder fixture vs async Voyage production path — no conftest changes needed
+- [03-01]: D-10 enforced in pipeline — thresholds/codes/templates never pass through embeddings; exact table upsert only (tested)
 
 ### Pending Todos
 
@@ -133,6 +137,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-02T03:45:06.589Z
-Stopped at: Phase 3 context gathered
+Last session: 2026-06-02T06:52:00.000Z
+Stopped at: "Completed 03-01 — KB ingest pipeline (29 tests GREEN, Plan 3 of 5)"
 Resume file: None
