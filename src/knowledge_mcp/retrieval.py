@@ -190,6 +190,18 @@ def assemble_citations(rows: list[dict]) -> list[Citation]:
     """
     citations = []
     for row in rows:
+        # D-14: extract conflict_id from metadata JSONB field (set at ingest
+        # time by pipeline.py for prose chunks tied to a CONTRA entry).
+        # Never read from snapshot_version — that field is the ingest run_id.
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, str):
+            import json as _json
+            try:
+                metadata = _json.loads(metadata)
+            except Exception:
+                metadata = {}
+        conflict_id = metadata.get("conflict_id")
+
         citation = Citation(
             text=row["body"],
             source=row["source"],
@@ -198,6 +210,7 @@ def assemble_citations(rows: list[dict]) -> list[Citation]:
             recency_flag=row.get("recency_flag"),  # None if not stale
             snapshot_version=row["snapshot_version"],
             score=float(row.get("rrf_score", 0.0)),
+            conflict_id=conflict_id,
         )
         citations.append(citation)
     return citations

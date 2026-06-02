@@ -167,12 +167,14 @@ def read_prose_sources() -> list[dict[str, Any]]:
     if svg_path.exists():
         body = _extract_svg_text(svg_path)
         if body.strip():
+            source_key = "WorkFlow.svg"
             records.append(
                 {
-                    "source": "WorkFlow.svg",
+                    "source": source_key,
                     "source_type": "policy_prose",
                     "authority_rank": _RANK_WORKFLOW,
                     "recency_flag": _recency_flag("WorkFlow.svg"),
+                    "conflict_id": _PROSE_CONFLICT_MAP.get(source_key),
                     "body": body,
                 }
             )
@@ -191,12 +193,15 @@ def read_prose_sources() -> list[dict[str, Any]]:
             continue
 
         if body.strip():
+            source_key = f"Email Templates/{tmpl_path.name}"
             records.append(
                 {
-                    "source": f"Email Templates/{tmpl_path.name}",
+                    "source": source_key,
                     "source_type": "policy_prose",
                     "authority_rank": _RANK_TEMPLATE,
                     "recency_flag": _recency_flag(tmpl_path.name),
+                    "conflict_id": _PROSE_CONFLICT_MAP.get(tmpl_path.name)
+                              or _PROSE_CONFLICT_MAP.get(source_key),
                     "body": body,
                 }
             )
@@ -207,12 +212,15 @@ def read_prose_sources() -> list[dict[str, Any]]:
         for pdf_path in sorted(confluence_dir.glob("*.pdf")):
             body = _extract_pdf_text(pdf_path)
             if body.strip():
+                source_key = f"Confluence/{pdf_path.name}"
                 records.append(
                     {
-                        "source": f"Confluence/{pdf_path.name}",
+                        "source": source_key,
                         "source_type": "policy_prose",
                         "authority_rank": _RANK_CONFLUENCE,
                         "recency_flag": _recency_flag(pdf_path.name),
+                        "conflict_id": _PROSE_CONFLICT_MAP.get(pdf_path.name)
+                                  or _PROSE_CONFLICT_MAP.get(source_key),
                         "body": body,
                     }
                 )
@@ -233,6 +241,22 @@ _THRESHOLD_CONFLICT_MAP: dict[str, str] = {
     "THR-08": "CONTRA-02",
     "THR-05": "CONTRA-02",
     "THR-07": "CONTRA-03",
+}
+
+# Conflict mapping for PROSE sources (D-14 / CONFLICT-INVENTORY.md).
+# Maps source filename (as stored in kb_chunk.source) -> conflict_id.
+# When a prose chunk is ingested from one of these sources, its metadata
+# carries the conflict_id so apply_override() (D-14) can look up a
+# policy_resolution row without abusing snapshot_version.
+#
+# Rule: a source entry here means the source participates in at least one
+# CONTRA conflict.  If a source participates in multiple conflicts the
+# dominant one is listed (rarest case — most sources map to exactly one CONTRA).
+_PROSE_CONFLICT_MAP: dict[str, str] = {
+    # CONTRA-01: dual-warranty window (45d purchase vs 14d delivery)
+    # billing-template.md is the STALE source; WorkFlow.svg is the authoritative one.
+    "billing-template.md": "CONTRA-01",
+    "Email Templates/billing-template.md": "CONTRA-01",
 }
 
 # Authority rank for thresholds — WorkFlow.svg is primary source

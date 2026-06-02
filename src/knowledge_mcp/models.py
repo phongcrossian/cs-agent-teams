@@ -26,6 +26,12 @@ class Citation(BaseModel):
 
     Carries D-12 authority rank, D-15 recency flag, and RRF score so
     the Phase-4 caller can apply its own ranking policy if needed.
+
+    conflict_id: populated from kb_chunk.metadata["conflict_id"] (set at ingest
+    time for prose chunks linked to a CONFLICT-INVENTORY CONTRA entry) or from
+    policy_threshold.conflict_id for threshold-based citations. Used by
+    _extract_conflict_ids() to look up policy_resolution override rows (D-14).
+    NEVER encoded in snapshot_version — that field is the ingest run_id only.
     """
 
     text: str
@@ -33,8 +39,9 @@ class Citation(BaseModel):
     source_type: str        # "policy_prose" | "template" | "threshold" | "code_map"
     authority_rank: int     # D-12: WorkFlow=3, Templates=2, Confluence=1
     recency_flag: Optional[str] = None  # D-15: "stale" if CONFLICT-INVENTORY flagged, else None
-    snapshot_version: str   # content_hash from ingest run (idempotent ingest key)
+    snapshot_version: str   # run_id from ingest run (idempotent ingest key)
     score: float            # RRF fused score (higher = more relevant)
+    conflict_id: Optional[str] = None  # D-14: CONTRA-* if chunk is part of a known conflict
 
 
 class SemanticSearchResult(BaseModel):

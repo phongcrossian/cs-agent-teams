@@ -59,32 +59,34 @@ class ConflictResult:
 
 
 def _extract_conflict_ids(citations: list[Citation]) -> list[str]:
-    """Extract conflict_ids embedded in citation snapshot_version fields.
+    """Extract conflict_ids from Citation.conflict_id fields.
 
-    Convention: during ingest, threshold rows with conflict_id store it in
-    their snapshot_version as "conflict:<CONTRA-ID>:<run_id>" so the MCP can
-    recover it. Citations from kb_chunk do not carry conflict_ids directly.
+    Citation.conflict_id is populated by assemble_citations() from
+    kb_chunk.metadata["conflict_id"], which the ingest pipeline writes
+    for prose chunks tied to a CONFLICT-INVENTORY CONTRA entry.
+
+    snapshot_version is the ingest run_id only — conflict_ids are NEVER
+    encoded there (that was dead code: the ingest pipeline never wrote the
+    "conflict:<ID>:<run_id>" prefix that the old implementation expected).
 
     Returns list of unique conflict_ids found (may be empty).
     """
     conflict_ids = []
     seen: set[str] = set()
     for c in citations:
-        sv = c.snapshot_version or ""
-        if sv.startswith("conflict:"):
-            parts = sv.split(":", 2)
-            if len(parts) >= 2 and parts[1] and parts[1] not in seen:
-                conflict_ids.append(parts[1])
-                seen.add(parts[1])
+        cid = c.conflict_id
+        if cid and cid not in seen:
+            conflict_ids.append(cid)
+            seen.add(cid)
     return conflict_ids
 
 
 def _sources_conflict(citations: list[Citation]) -> bool:
-    """Detect conflict by recency_flag and source diversity.
+    """Detect conflict by recency_flag and conflict_id metadata.
 
     Two citations conflict if:
     - At least one is stale AND at least one is current (stale vs. current).
-    - Citations carry known conflict_ids in their snapshot_version.
+    - Citations carry known conflict_ids from ingest metadata (Citation.conflict_id).
     """
     stale = [c for c in citations if c.recency_flag == "stale"]
     current = [c for c in citations if c.recency_flag != "stale"]
@@ -93,7 +95,7 @@ def _sources_conflict(citations: list[Citation]) -> bool:
     if stale and current:
         return True
 
-    # Known conflict_ids from ingest metadata
+    # Known conflict_ids from ingest metadata (D-14)
     if _extract_conflict_ids(citations):
         return True
 

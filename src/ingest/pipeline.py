@@ -92,6 +92,7 @@ class IngestPipeline:
                         "source_type": record["source_type"],
                         "authority_rank": record["authority_rank"],
                         "recency_flag": record.get("recency_flag"),
+                        "conflict_id": record.get("conflict_id"),
                         "body": passage["body"],
                     }
                 )
@@ -116,6 +117,12 @@ class IngestPipeline:
                     # T-03-01-ID: redact before logging
                     safe_preview = redact_text(chunk["body"][:80])
                     logger.debug("upserting chunk source=%s preview=%s", chunk["source"], safe_preview)
+                    # D-14: carry conflict_id in metadata so assemble_citations()
+                    # can populate Citation.conflict_id for apply_override() lookups.
+                    # Never encode in snapshot_version (that field = run_id only).
+                    chunk_metadata: dict = {"recency_flag": chunk["recency_flag"]}
+                    if chunk.get("conflict_id"):
+                        chunk_metadata["conflict_id"] = chunk["conflict_id"]
                     await self.upsert_chunk(
                         conn,
                         source=chunk["source"],
@@ -123,7 +130,7 @@ class IngestPipeline:
                         authority_rank=chunk["authority_rank"],
                         body=chunk["body"],
                         embedding=embedding,
-                        metadata={"recency_flag": chunk["recency_flag"]},
+                        metadata=chunk_metadata,
                         run_id=run_id,
                         recency_flag=chunk["recency_flag"],
                     )
