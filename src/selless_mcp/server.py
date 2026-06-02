@@ -34,7 +34,7 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from mcp.types import ToolAnnotations
 
-from src.selless_mcp.audit import AuditMiddleware, set_audit_pool
+from src.selless_mcp.audit import AuditMiddleware, assert_audit_pool_configured, set_audit_pool
 from src.selless_mcp.client import MockSellessClient, SellessClient
 from src.selless_mcp.models import (
     CustomerInfo,

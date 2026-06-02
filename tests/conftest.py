@@ -131,6 +131,29 @@ def stub_embedder(monkeypatch):
     monkeypatch.setattr(emb, "embed_documents", lambda texts: [[0.0] * 1024 for _ in texts])
 
 
+@pytest.fixture(autouse=True)
+def audit_test_bypass():
+    """Enable the audit test bypass so tests that call _impl_* directly (without
+    the AuditMiddleware) do not trigger the production fail-closed RuntimeError
+    when no audit pool is configured.
+
+    Tests that explicitly need fail-closed behavior must set
+    set_audit_pool(None, _test_bypass=False) for the duration of the assertion
+    and restore it in their finally block.
+
+    autouse=True: applied to every test automatically.
+    """
+    from src.selless_mcp.audit import set_audit_pool, get_audit_pool
+    # Preserve any pool already set (e.g. by db_pool fixture in same test)
+    # but ensure bypass is active so the module-level default is safe.
+    existing_pool = get_audit_pool()
+    from src.selless_mcp import audit as _audit_mod
+    _audit_mod._audit_test_bypass = True
+    yield
+    # Restore after each test (do not change pool — let per-test fixtures manage it)
+    _audit_mod._audit_test_bypass = True
+
+
 @pytest.fixture
 async def clean_knowledge_db(db_pool):
     """Truncate knowledge.* + audit.* tables between tests.
