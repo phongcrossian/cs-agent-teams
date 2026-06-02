@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-02T02:15:15.210Z",
+  "phase": "03",
+  "phase_name": "grounding-layer-selless-mcp-knowledge-rag-mcp",
+  "phase_dir": ".planning/phases/03-grounding-layer-selless-mcp-knowledge-rag-mcp",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "workflow": "gsd-plan-phase 3",
+  "workflow_stage": "research",
+  "completed_tasks": [
+    {"id": 1, "name": "Initialize plan-phase (init.plan-phase JSON parsed)", "status": "done"},
+    {"id": 2, "name": "Load 03-CONTEXT.md (16 locked decisions D-01..D-16)", "status": "done"},
+    {"id": 3, "name": "Resolve gates: MVP_MODE=true, AI-SPEC skipped (user), research=yes (user)", "status": "done"},
+    {"id": 4, "name": "Spawn gsd-phase-researcher for 03-RESEARCH.md", "status": "in_progress", "progress": "First run did 42 tool calls then died on socket error WITHOUT writing the file. Resumed in background (agentId a0dab2a27581c1a27) to write the file from existing context. As of pause, 03-RESEARCH.md still MISSING on disk."}
+  ],
+  "remaining_tasks": [
+    {"id": 4, "name": "Confirm 03-RESEARCH.md written (## RESEARCH COMPLETE + ## Validation Architecture section)", "status": "in_progress"},
+    {"id": 5, "name": "Step 5.5: Create 03-VALIDATION.md from RESEARCH.md Validation Architecture (Nyquist enabled)", "status": "not_started"},
+    {"id": 6, "name": "Step 7.8: Spawn gsd-pattern-mapper → 03-PATTERNS.md (enabled)", "status": "not_started"},
+    {"id": 7, "name": "Step 8: Spawn gsd-planner (model=opus, MVP vertical-slice mode) → PLAN.md files", "status": "not_started"},
+    {"id": 8, "name": "Step 10-12: gsd-plan-checker verification + revision loop (max 3)", "status": "not_started"},
+    {"id": 9, "name": "Step 13/13a: Requirements + Decision coverage gates", "status": "not_started"},
+    {"id": 10, "name": "Step 13b-13d: Record planning in STATE.md, annotate ROADMAP, commit plans", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "gsd-phase-researcher died on socket error after 42 tool calls without writing 03-RESEARCH.md; resumed in background but unconfirmed", "type": "technical", "workaround": "On resume: check if 03-RESEARCH.md exists. If yes and valid, continue from step 5.5. If still missing, re-run /gsd:plan-phase 3 --research (researcher re-investigates) OR check background agent a0dab2a27581c1a27."},
+    {"description": "Selless API endpoints/auth/field shapes UNCONFIRMED (D-01/D-05) — needs user-supplied API docs/credentials", "type": "human_action", "workaround": "Planner designs clean client seam + mock/stub for tests; endpoints filled in later. Not blocking for planning."}
+  ],
+  "human_actions_pending": [
+    {"action": "Provide Selless API documentation + credentials", "context": "D-01/D-05: Selless API is 'built for platform not AI', scattered, unconfirmed. Needed before the Selless MCP can connect to real data (tests use mock/stub until then).", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Skip AI-SPEC gate, continue planning", "rationale": "Stack already locked in CLAUDE.md (FastMCP, pgvector, Voyage); eval harness is Phase 5. Non-blocking.", "phase": "03"},
+    {"decision": "Research before planning", "rationale": "Selless API is the #1 research risk (D-01/D-05); RAG/pgvector/Voyage params need confirmation.", "phase": "03"},
+    {"decision": "MVP mode active (vertical slices)", "rationale": "ROADMAP has **Mode:** mvp for Phase 3; aligns with demonstrable end-state (standalone MCP smoke test).", "phase": "03"}
+  ],
+  "uncommitted_files": [".omc/project-memory.json", ".omc/sessions/da4c6059-4407-454d-ad84-ec4188ec4425.json", ".omc/state/mission-state.json", ".planning/config.json"],
+  "next_action": "Check whether .planning/phases/03-grounding-layer-selless-mcp-knowledge-rag-mcp/03-RESEARCH.md now exists. If valid, resume /gsd:plan-phase 3 at step 5.5 (VALIDATION.md). If missing, re-run /gsd:plan-phase 3 --research.",
+  "context_notes": "Mid /gsd-plan-phase 3. CONTEXT.md fully read; phase is dual-MCP grounding infra (Selless transactional MCP + Knowledge RAG MCP) with 16 locked decisions. User chose research-first + skip-AI-SPEC. Researcher was the only thing in flight; its output file was not confirmed written due to a socket error. Everything downstream (validation/pattern-map/plan/check/gates) is untouched."
+}
