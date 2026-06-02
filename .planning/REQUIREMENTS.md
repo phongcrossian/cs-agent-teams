@@ -11,16 +11,16 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 - [x] **KB-01**: Knowledge survey produces an inventory of all sources (Confluence spaces, Google Sheets/Docs), their formats, and coverage per common ticket type
 - [x] **KB-02**: Knowledge survey produces a conflict inventory flagging stale, contradictory, or missing policy content
-- [ ] **KB-03**: An ingest → normalize → index pipeline builds a centralized RAG store from the surveyed sources
-- [ ] **KB-04**: Knowledge content can be re-synced/re-indexed when policies change
-- [ ] **KB-05**: An MCP Knowledge server answers semantic queries over the RAG store and returns source citations with each result
+- [x] **KB-03**: An ingest → normalize → index pipeline builds a centralized RAG store from the surveyed sources
+- [x] **KB-04**: Knowledge content can be re-synced/re-indexed when policies change
+- [x] **KB-05**: An MCP Knowledge server answers semantic queries over the RAG store and returns source citations with each result
 
 ### Transactional Data (MCP Selless)
 
-- [ ] **SEL-01**: An MCP Selless server returns order info and current order status by order ID or customer email
-- [ ] **SEL-02**: MCP Selless returns customer info and purchase/order history
-- [ ] **SEL-03**: MCP Selless returns the customer's prior ticket history for context
-- [ ] **SEL-04**: MCP Selless enforces scoped read-only permissions, rate limiting, and audit logging on every call
+- [x] **SEL-01**: An MCP Selless server returns order info and current order status by order ID or customer email
+- [x] **SEL-02**: MCP Selless returns customer info and purchase/order history
+- [x] **SEL-03**: MCP Selless returns the customer's prior ticket history for context
+- [x] **SEL-04**: MCP Selless enforces scoped read-only permissions, rate limiting, and audit logging on every call
 
 ### Reply Pipeline
 
@@ -70,13 +70,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | KB-01 | Phase 1 | Complete |
 | KB-02 | Phase 1 | Complete |
-| KB-03 | Phase 3 | Pending |
-| KB-04 | Phase 3 | Pending |
-| KB-05 | Phase 3 | Pending |
-| SEL-01 | Phase 3 | Pending |
-| SEL-02 | Phase 3 | Pending |
-| SEL-03 | Phase 3 | Pending |
-| SEL-04 | Phase 3 | Pending |
+| KB-03 | Phase 3 | Complete |
+| KB-04 | Phase 3 | Complete |
+| KB-05 | Phase 3 | Complete |
+| SEL-01 | Phase 3 | Complete |
+| SEL-02 | Phase 3 | Complete |
+| SEL-03 | Phase 3 | Complete |
+| SEL-04 | Phase 3 | Complete |
 | REP-01 | Phase 4 | Pending |
 | REP-02 | Phase 4 | Pending |
 | REP-03 | Phase 4 | Pending |
