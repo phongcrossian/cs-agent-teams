@@ -15,6 +15,9 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 <!-- Shipped and confirmed valuable. -->
 
 - [x] Knowledge-base **inventory/survey** documents sources, formats, coverage by ticket type, conflicts, update cadence, and tacit knowledge gaps — *Validated in Phase 1: Knowledge Survey & Conflict Inventory (2026-06-01). Delivered SURVEY/GLOSSARY/CODE-MAP/POLICY-THRESHOLD-INDEX/CONFLICT-INVENTORY/COVERAGE-MAP/ACTION-ITEMS; 5 human-review items tracked in 01-HUMAN-UAT.md.*
+- [x] **MCP Selless** server exposes the necessary transactional reads (order status, customer info, purchase/order history, full ticket history) with scoped read permissions, rate limiting, and logging — *Validated in Phase 3: Grounding Layer (2026-06-02). Selless MCP is the sole security boundary: explicit-extraction field whitelist (D-04), keyed-only access (D-03), token-bucket rate limit + read-only (D-08), fail-closed PII-redacted audit per call (D-06/D-07). 48+ tests; live gateway human-attested.*
+- [x] **MCP Knowledge** server provides semantic search over a centralized knowledge base (policies, product info, prior-ticket patterns) with source citations — *Validated in Phase 3: Grounding Layer (2026-06-02). Cited RRF hybrid search + exact lookups, conflict-aware (D-13 surface-all, D-14 CS-Lead override wired to real ingest data, D-15 stale flag), D-12 authority hierarchy in citations.*
+- [x] Knowledge **ingest → normalize → index** pipeline builds the centralized RAG store from Confluence + Google Sheet/Doc — *Validated in Phase 3: Grounding Layer (2026-06-02). Idempotent content_hash upsert (KB-04), Voyage voyage-3-large embeddings into pgvector; re-ingest CLI (D-16).*
 
 ### Active
 
@@ -24,9 +27,6 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 - [ ] AI extracts the key info needed to answer (order ref, customer, issue type)
 - [ ] AI drafts a customer reply grounded in retrieved order data + policy knowledge
 - [ ] AI posts the reply directly into the correct existing Freshdesk ticket via API
-- [ ] **MCP Selless** server exposes the necessary transactional reads (order status, customer info, purchase/order history) with scoped read permissions, rate limiting, and logging
-- [ ] **MCP Knowledge** server provides semantic search over a centralized knowledge base (policies, product info, prior-ticket patterns) with source citations
-- [ ] Knowledge **ingest → normalize → index** pipeline builds the centralized RAG store from Confluence + Google Sheet/Doc
 - [ ] **Offline evaluation harness** scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference answers), iterated until a defined quality bar is met
 - [ ] **Guardrails** auto-route high-risk tickets to a human agent (money-related, complaints/legal, complex/ambiguous) instead of auto-answering
 - [ ] **Shadow mode**: AI drafts but does not send; agents review/score before any live sending
@@ -98,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 — Phase 2 (Freshdesk I/O Layer & Pipeline Backbone) complete: REP-05 exactly-once intake + posting verified (live sandbox D-03).*
+*Last updated: 2026-06-02 — Phase 3 (Grounding Layer) complete: Selless transactional MCP + Knowledge RAG MCP + ingest pipeline shipped (KB-03/04/05, SEL-01..04); verification 14/14; 2 code-review blockers (D-14 override dead-code, audit best-effort) fixed at root.*
