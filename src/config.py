@@ -87,6 +87,46 @@ class Settings(BaseSettings):
         description="Throttle window in minutes for per-ticket reply limit",
     )
 
+    # === Phase 3 additions — grounding layer =====================================
+
+    # Selless API (D-01, gateway-trust model confirmed 2026-06-02)
+    selless_api_base_url: str = Field(
+        default="https://api.selless.dev/admin/csm/order/public/tickets",
+        description=(
+            "Selless API base URL (public/tickets prefix). No auth token needed "
+            "— access gated at network/gateway layer."
+        ),
+    )
+    # Reserve field for future gateway auth header if prod VPN requires it
+    selless_api_gateway_key: str = Field(
+        default="",
+        description="Optional gateway auth header value — NEVER log this value",
+    )
+
+    # Voyage embeddings (KB-05, CLAUDE.md mandate)
+    voyage_api_key: str = Field(
+        default="",
+        description="Voyage AI API key for voyage-3-large embeddings — NEVER log",
+    )
+    voyage_model: str = Field(
+        default="voyage-3-large",
+        description="Voyage embedding model name",
+    )
+    voyage_output_dimension: int = Field(
+        default=1024,
+        description="Embedding dimension (voyage-3-large default: 1024)",
+    )
+
+    # Selless MCP rate limit (D-08, Claude's discretion)
+    selless_rate_limit_rps: float = Field(
+        default=1.0,
+        description="Selless MCP server-wide token bucket: requests/second",
+    )
+    selless_rate_limit_burst: int = Field(
+        default=10,
+        description="Selless MCP token bucket burst capacity",
+    )
+
     @field_validator("selless_sync_user_ids", mode="before")
     @classmethod
     def parse_selless_sync_user_ids(cls, v: object) -> set[int]:
@@ -100,12 +140,14 @@ class Settings(BaseSettings):
         return set()
 
     def __repr__(self) -> str:
-        """Never expose api_key or webhook_secret in repr/logs."""
+        """Never expose api_key, webhook_secret, selless_api_gateway_key, or voyage_api_key."""
         return (
             f"Settings(send_mode={self.send_mode!r}, "
             f"freshdesk_domain={self.freshdesk_domain!r}, "
             f"database_url={self.database_url!r}, "
-            f"freshdesk_api_key=<REDACTED>, webhook_secret=<REDACTED>)"
+            f"selless_api_base_url={self.selless_api_base_url!r}, "
+            f"freshdesk_api_key=<REDACTED>, webhook_secret=<REDACTED>, "
+            f"selless_api_gateway_key=<REDACTED>, voyage_api_key=<REDACTED>)"
         )
 
     model_config = {
