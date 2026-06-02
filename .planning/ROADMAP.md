@@ -84,7 +84,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The orchestrator produces a draft grounded in retrieved order data + KB content with citations, making no ungrounded claims, and runs a self-critique pass scoring it against the quality rubric before any send
   3. High-risk tickets (money/refund, legal/complaints, complex/ambiguous) are auto-routed to a human — any high-risk signal escalates the whole ticket — rather than auto-answered
   4. An output guard blocks commitment language about refunds/credits/charges/order changes regardless of category, and email body content is treated as data (delimited, injection-screened) not instructions
-**Plans**: TBD
+**Plans**: 4 plans (4 waves; vertical MVP slices over a Wave-0 bootstrap; deterministic safety guards built before the orchestrator that composes them)
+- [ ] 04-00-PLAN.md — Wave 0 bootstrap: deps (pydantic-ai/anthropic/langfuse/otel, [ASSUMED] legitimacy human-verify) + Settings (Haiku/Sonnet models + Langfuse, secret redaction) + pipeline schemas/errors/LLM-client-seam/tracing + RED test stubs (Wave 0)
+- [ ] 04-01-PLAN.md — Deterministic safety guards (no LLM): injection screen + delimiting + commitment-language output guard (SAFE-04/D-13/D-14) + money/legal/conflict/stale escalation checks (SAFE-03/D-08/D-09) (Wave 1)
+- [ ] 04-02-PLAN.md — Orchestrator vertical slice: classify+extract (Haiku, REP-01/02) + ground(MCP)+draft+critique (Sonnet, REP-03/04) + staged run_pipeline with any-signal early-exit escalation + redraft-once (D-01/D-10/D-12) (Wave 2)
+- [ ] 04-03-PLAN.md — Wire run_pipeline into the Phase-2 worker DRY_RUN seam (D-02): verdict routing (draft→dry_run_log / escalate→no send, D-10) + LLM error taxonomy + end-to-end DRY_RUN smoke + human-verify (Wave 3)
+**UI hint**: no
 
 ### Phase 5: Offline Evaluation Harness (THE GATE)
 **Goal**: Make answer quality measurable and binding — replay a golden dataset of historical tickets through the same production pipeline code, score faithfulness/correctness/tone (not similarity to flawed past replies), and define the numeric quality bar that gates go-live.
@@ -130,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
+| 4. Reply Pipeline + Safety Guards | 0/4 | Planned | - |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
