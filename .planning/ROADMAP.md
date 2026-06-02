@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
 - [x] **Phase 2: Freshdesk I/O Layer & Pipeline Backbone** - Isolated, rate-limit-aware Freshdesk client + queued intake with idempotent, loop-safe posting (completed 2026-06-01)
-- [ ] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB
+- [x] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB (completed 2026-06-02)
 - [ ] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards
 - [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
 - [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
@@ -71,7 +71,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 03-01-PLAN.md — KB ingest → normalize → index pipeline + idempotent re-ingest CLI; prose chunks + exact threshold/code-map/template rows from Phase-1 snapshots (KB-03/KB-04, D-10/D-16, Wave 1)
 - [x] 03-02-PLAN.md — Knowledge MCP query surface: cited semantic_search (RRF hybrid) + exact lookup_threshold/lookup_code/get_template + conflict flag/override (KB-05, D-12/D-13/D-14/D-15, Wave 2)
 - [x] 03-03-PLAN.md — Selless MCP: keyed reads + resolve_order + field whitelist + PII-redacted audit + rate-limit/read-only at the sole security boundary, on MockSellessClient (SEL-01..04, D-02/D-03/D-04/D-06/D-07/D-08, Wave 2)
-- [ ] 03-04-PLAN.md — Standalone MCP-client smoke demo proving all 4 success criteria + live gateway/Voyage human-verify (D-05, Wave 3)
+- [x] 03-04-PLAN.md — Standalone MCP-client smoke demo proving all 4 success criteria + live gateway/Voyage human-verify (D-05, Wave 3)
 **UI hint**: no
 
 ### Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards
@@ -129,7 +129,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
-| 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 4/5 | In Progress|  |
+| 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
 | 4. Reply Pipeline + Safety Guards | 0/TBD | Not started | - |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |

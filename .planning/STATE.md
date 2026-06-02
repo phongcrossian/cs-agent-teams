@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Completed 03-01 — KB ingest pipeline (29 tests GREEN, Plan 3 of 5)"
-last_updated: "2026-06-02T07:06:49.545Z"
+status: verifying
+stopped_at: "Completed 03-04 — smoke demo plan (Phase 3 complete, all 5 plans done)"
+last_updated: "2026-06-02T07:24:05.808Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 14
-  percent: 29
+  completed_plans: 15
+  percent: 43
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 
 Phase: 03 (grounding-layer-selless-mcp-knowledge-rag-mcp) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-02
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -104,6 +104,8 @@ Recent decisions affecting current work:
 - [03-01]: content_hash keyed on sha256(source+body) — unique per source+content; changing either triggers re-embed
 - [03-01]: inspect.isawaitable() bridges sync stub_embedder fixture vs async Voyage production path — no conftest changes needed
 - [03-01]: D-10 enforced in pipeline — thresholds/codes/templates never pass through embeddings; exact table upsert only (tested)
+- [03-04]: Live HttpSellessClient + Voyage path sandbox-gated and never runs in CI; Phase-3 live verification is human-attested (user approved RUN_SANDBOX=1 sandbox smoke)
+- [03-04]: PydanticDeprecatedSince211 in audit.py:69 (model_fields on instance) is harmless — tidy to class access in a later plan
 
 ### Pending Todos
 
@@ -139,6 +141,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-02T07:06:49.538Z
+Last session: 2026-06-02T07:24:05.800Z
 Stopped at: "Completed 03-01 — KB ingest pipeline (29 tests GREEN, Plan 3 of 5)"
 Resume file: None
