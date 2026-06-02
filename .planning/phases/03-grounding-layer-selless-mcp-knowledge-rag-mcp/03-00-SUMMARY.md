@@ -36,7 +36,7 @@ key_files:
     - tests/conftest.py
 decisions:
   - "voyageai==0.3.7 installed with --ignore-requires-python (Python 3.14 > declared <3.14 cap; imports and works correctly)"
-  - "pgvector pg16 binary requires manual build from source — Homebrew 0.8.2 only ships pg17/pg18 bottles"
+  - "Migrations run against the project's intended Docker DB (pgvector/pgvector:pg16, csbot=superuser, pgvector pre-baked) — not a local Homebrew pg where csbot lacks superuser to CREATE the untrusted 'vector' extension"
   - "register_vector wrapped in try/except to avoid Phase-2 regression when vector extension not yet installed"
   - "uv not present in PATH; pip install against .venv used instead; pyproject.toml updated manually"
 metrics:
@@ -78,7 +78,7 @@ metrics:
 - `migrations/versions/0003_selless_audit.py`: revision "0003", down_revision "0002"
   - `audit.selless_audit`: PII-redacted audit trail (SEL-04/D-07)
   - Index on (tool, created_at)
-- **BLOCKER: `alembic upgrade head` could not complete** — see Deferred Issues below
+- **`alembic upgrade head` applied** (chain 0001→0002→0003) against the Docker `pgvector/pgvector:pg16` stack — all 6 tables queryable, `vector`+`pg_trgm` present, vector codec round-trip confirmed. See Resolved Issues below for how the DB-environment blocker was cleared.
 
 ### Task 3 — Test Scaffolding
 - `tests/conftest.py` extended: `db_pool` now registers pgvector codec via `init=_init_conn` (graceful skip if extension absent); 4 new fixtures: `mock_selless_client`, `stub_embedder`, `clean_knowledge_db`, `selless_respx_mock`
@@ -111,35 +111,21 @@ metrics:
 - **Files modified:** tests/conftest.py
 - **Commit:** c5048c7
 
-### Deferred Issues
+### Resolved Issues
 
-**pgvector pg16 binary — alembic upgrade head BLOCKED**
+**DB-environment blocker — alembic upgrade head (RESOLVED during Wave 0 orchestration)**
 
-The plan required `alembic upgrade head` to succeed and all 6 tables to be queryable. This was **not achieved** due to a pgvector installation issue:
+The executor initially reported `alembic upgrade head` as blocked and mis-diagnosed the cause as "Homebrew pgvector 0.8.2 ships no pg16 bottle, must build from source." That diagnosis was wrong.
 
-- Root cause: Homebrew `pgvector` 0.8.2 only ships pre-built bottles for `postgresql@17` and `postgresql@18`. This project runs `postgresql@16` (version 16.14).
-- Attempts made:
-  1. `brew install pgvector` — installed 0.8.2 but only pg17/pg18 bottles
-  2. Copied SQL/control files to pg16 extension dir — succeeded
-  3. Copied `.dylib` from pg17 build — failed with "version mismatch: library is version 17" at CREATE EXTENSION time
-  4. `git clone` pgvector from GitHub to build from source — blocked by auto mode classifier (supply-chain gate; GitHub clone-and-build not covered by the Task 0 PyPI approval)
+- **Actual root cause:** The Postgres answering on `localhost:5432` was a *local Homebrew* `postgresql@16` instance, in which `csbot` is an ordinary (non-superuser) application role. `vector` is an **untrusted** extension, so `CREATE EXTENSION vector` requires superuser — hence `InsufficientPrivilegeError: permission denied to create extension "vector"`. pgvector itself was present in `pg_available_extensions`; nothing needed to be built from source. The project's *intended* database is the `pgvector/pgvector:pg16` Docker image declared in `docker-compose.yml` (where `csbot` is the container superuser and pgvector is pre-baked) — that container simply was not running.
+- **Resolution (orchestrator, user chose the Docker path):**
+  1. Installed a container runtime: `brew install colima docker docker-compose`; `colima start`.
+  2. Gracefully stopped the local Homebrew pg via `pg_ctl -D /opt/homebrew/var/postgresql@16 stop -m fast` (data dir preserved — restartable) to free port 5432.
+  3. `docker-compose up -d postgres` → `pgvector/pgvector:pg16` healthy.
+  4. `alembic upgrade head` → chain 0001→0002→0003 applied cleanly.
+- **Verification:** all 6 tables (`knowledge.kb_chunk`, `policy_threshold`, `code_map`, `template_library`, `policy_resolution`, `audit.selless_audit`) queryable; `vector` + `pg_trgm` present in `pg_extension`; `alembic_version = 0003`; a vector round-trip through `knowledge.kb_chunk.embedding` returned a 1024-dim ndarray (pgvector asyncpg codec confirmed working).
 
-**Resolution required (user action):**
-```bash
-# Option A: Build pgvector from source for pg16
-cd /tmp
-curl -L https://github.com/pgvector/pgvector/archive/refs/tags/v0.8.0.tar.gz -o pgvector.tar.gz
-tar xzf pgvector.tar.gz && cd pgvector-0.8.0
-PG_CONFIG=/opt/homebrew/opt/postgresql@16/bin/pg_config make && make install
-# Then run:
-alembic upgrade head
-
-# Option B: Use superuser to pre-install extensions, then run alembic
-psql -U admin -d csbot -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-alembic upgrade head
-```
-
-After user installs pgvector for pg16 and runs `alembic upgrade head`, all 6 tables and both extensions will be verified by the acceptance criteria command in the plan. The migrations themselves are DDL-correct and ready to apply.
+**Follow-up (non-blocking, for Plans 01/02):** the conftest `register_vector` wrapper still swallows all exceptions (`except Exception: pass`). Now that pgvector is present this succeeds, but Plans 01/02 (which add vector-dependent tests) should tighten it to fail loudly if codec registration ever fails, so a broken vector fixture can't pass silently.
 
 **Impact:** Plans 01-04 that write/read vector columns require the extension to be installed. Mock-backed unit tests (RED stubs) do not require the extension — they fail RED on import errors (correct for TDD scaffolding), not DB errors.
 
@@ -171,4 +157,4 @@ After user installs pgvector for pg16 and runs `alembic upgrade head`, all 6 tab
 | commit cfdc845 (Task 2) | FOUND |
 | commit c5048c7 (Task 3) | FOUND |
 
-**Note:** `alembic upgrade head` could not be fully verified due to pgvector pg16 binary missing (see Deferred Issues). Migration DDL is correct and ready to apply once pgvector is installed for pg16.
+**Note:** `alembic upgrade head` was applied and fully verified against the Docker `pgvector/pgvector:pg16` stack (chain 0001→0002→0003; all 6 tables queryable; `vector`+`pg_trgm` present; vector codec round-trip confirmed). See Resolved Issues for how the DB-environment blocker was cleared.
