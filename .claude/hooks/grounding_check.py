@@ -50,8 +50,16 @@ def check_grounding(draft: str, citations: list[dict]) -> tuple[bool, str]:
         return False, "grounding:no_citations_in_draft"
 
     # Rule 2: markers reference unknown citations
+    # Normalize citation IDs: accept both "KB-1" and "[KB-1]" as equivalent.
+    # Markers extracted from draft are always in "[KB-1]" form (with brackets).
+    # Citation dicts may use either form — normalize to bracketed form for comparison.
     if markers_in_draft:
-        known_ids: set[str] = {c["id"] for c in citations if "id" in c}
+        raw_ids: set[str] = {c["id"] for c in citations if "id" in c}
+        # Normalize: wrap bare IDs (without brackets) to bracketed form
+        known_ids: set[str] = {
+            f"[{cid}]" if not cid.startswith("[") else cid
+            for cid in raw_ids
+        }
         unknown = markers_in_draft - known_ids
         if unknown:
             return False, f"grounding:unknown_citation_ids:{','.join(sorted(unknown))}"
