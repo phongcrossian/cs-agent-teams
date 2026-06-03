@@ -24,12 +24,16 @@ A commitment in a draft is **AUTHORIZED** (allow) iff ALL hold:
 2. The offered value is **within the policy threshold** for that flow (POLICY-THRESHOLD-INDEX), AND
 3. The **order is eligible** (warranty window THR-03/04; not already at a higher remediation tier — the
    "offered 50% before?" / "replacement already provided?" state), grounded via Selless, AND
-4. It commits only to **customer-answer remediation** (refund/discount/replacement/keep-item) — NOT to an
-   **operational action the AI cannot perform** (see §1).
+4. It is consistent with the documented Flow + policy for that case (see §1 for the
+   operational-action execution boundary).
 
 Anything else is **UNAUTHORIZED** → block → escalate. Examples of unauthorized: a refund % above the
 threshold, an offer for an out-of-warranty order, a second remediation after one was already given, an
-invented coupon, or any claim that an operational action was executed.
+invented coupon/promo, or an offer/claim that does not follow the documented Flow + policy.
+
+**Threshold authority (user-confirmed Q5):** the AI MAY commit up to the policy thresholds
+(THR-05/06/07/08) **without per-case human sign-off**, provided the offer follows policy and the
+eligibility is grounded. Human sign-off is required only when the case falls outside policy.
 
 **Thresholds confirmed by the data (match Phase-1 index):**
 | Threshold | Value | Where seen |
@@ -41,18 +45,24 @@ invented coupon, or any claim that an operational action was executed.
 
 ---
 
-## 1. Operational-action boundary (Phase-1 scope guard — STRONG escalate)
+## 1. change_request IS in scope (user-confirmed Q1) — but the execution boundary matters
 
 Real `change_request` replies **claim an operational action was performed**:
 - Cancel_Order → *"we have canceled your order, and our billing team has processed the refund"*
 - Change_Shipping_Address → *"I've successfully updated the shipping address"*
 - Change_Product_Variant → *"we've updated your order to size X"*
 
-These are **operational actions** (cancel / address edit / variant swap / refund execution). **Phase 1 answers
-customers only — it never executes ops** (PROJECT.md / REQUIREMENTS Out-of-Scope). Therefore the AI MUST NOT
-draft a reply that **claims** such an action is done. Rule: **any `change_request` sub-type → escalate to ops**
-(the human performs the action on the Selless CS Portal, then replies). The AI may not say "we've
-canceled/updated…". This is an additional escalation trigger beyond money-risk.
+`change_request` is **in scope for the AI** (Q1). Approved templates exist: `cancellation request-template1..9`
+(F1–F14: 20% retention, reason-specific), `change request-template1..5`. Eligibility is gated by the
+1-hour windows (THR-01 cancel, THR-02 change) + order state, grounded via Selless.
+
+**Open execution-boundary (smaller clarification, not blocking — see §4.1):** these replies *assert the
+mutation is done*. The AI must not falsely claim an action it did not cause. Two viable models:
+(a) the AI drafts the templated confirmation **after** the cancel/address/variant mutation is executed
+(by ops or by an authorized Selless action), or (b) the mutation is wired as an authorized AI action.
+Until that is wired, a draft that *claims* "we've canceled/updated…" without the mutation having occurred
+is an **UNAUTHORIZED** commitment (§0) and must escalate. Phrasing that does not assert a completed action
+(e.g., acknowledge + state next step) can be drafted.
 
 ---
 
@@ -67,19 +77,19 @@ route to human; **AUTO\*** = auto only after a grounded eligibility/threshold ch
 | **Return** | 64 | 40%+free-ship (48), warranty check (30), 50% refund (20), replacement (14), 2-options (14); tmpl B-RETURN/B7 | Offer alternatives BEFORE return: replacement OR 50% refund (THR-07), + 40% VIP discount + free shipping (THR-05); keep item. Gated on warranty (THR-03/04) + "offered before?" | **AUTO\*** (warranty+eligibility grounded) else ESCALATE |
 | **Replace** | 37 | complimentary replacement (22), keep item (23), ask measurements (12), 40% (9); tmpl A/B replacement | Free replacement, keep original, request fit measurements (bra: under/full-bust; pant: waist/hip/inseam) | **AUTO\*** (in-stock variant + warranty) else ESCALATE |
 | **Partial_Refund** | 11 | 50% refund (6) + 40%+free-ship (10); tmpl B7/B-RETURN | 50% refund (THR-07) + 40% discount (THR-05) | **AUTO\*** else ESCALATE |
-| **Full_Refund** | 9 | mixed; warranty (2), evidence (1), discount (2) | Full refund only when variant unavailable / cannot replace (A4/A5/A9); often **evidence-gated** (photo + shipping label) | **ESCALATE** (full-refund authorization + evidence review = human) |
-| **Review** | 35 | tracking info (17), discount (12); apology + delivery-window explanation, no clean template | Mixed / needs investigation (SCE) — bespoke explanation, not a single template | **ESCALATE** (this is the "needs human judgement" bucket) |
+| **Full_Refund** | 9 | mixed; warranty (2), evidence (1), discount (2) | Full refund per flow when variant unavailable / cannot replace (A4/A5/A9), **evidence-gated** (photo + shipping label) where the flow requires it | **AUTO\*** with **stricter checks** — only when the case follows the documented Flow + policy and evidence requirements are met (Q4); else ESCALATE |
+| **Review** | 35 | tracking info (17), discount (12); apology + delivery-window explanation; **no dedicated template** | **GAP** — COVERAGE-MAP.csv: "Review complaint (product-review-related), 12% of Complaint, no dedicated template code found — named gap, CS team to confirm" | **ESCALATE** until CS team defines a Review flow (Q2: no flow exists yet) |
 
-### 2B. CHANGE_REQUEST (n=67) — operational actions (see §1)
-| Customer_Request | n | Real behavior | AI action |
-|---|---|---|---|
-| Change_Shipping_Address | 27 | "address updated" (operational) | **ESCALATE** (ops) |
-| Change_Product_Variant | 20 | "variant changed" + ask measurements (operational) | **ESCALATE** (ops) |
-| Cancel_Order | 15 | "order canceled + refund processed"; sometimes ≤20% retention offer first | **ESCALATE** (ops + refund execution) |
-| Change_Non_Shipping_Address / Express_Line | 4 | address/line edit | **ESCALATE** (ops) |
+### 2B. CHANGE_REQUEST (n=67) — IN SCOPE (Q1); templates exist; gated on §1 execution boundary
+| Customer_Request | n | Real behavior / template | Eligibility gate | AI action |
+|---|---|---|---|---|
+| Change_Shipping_Address | 27 | confirm address update; `change request-template*` | not yet shipped; valid address | **AUTO\*** (after mutation per §1) else ESCALATE |
+| Change_Product_Variant | 20 | variant swap + ask measurements; `change request-template*` | THR-02 (≤1h) / not fulfilled; variant in stock | **AUTO\*** (after mutation per §1) else ESCALATE |
+| Cancel_Order | 15 | cancel + refund; ≤20% retention offer first (THR-06/16); `cancellation request-template1..9` | THR-01 (≤1h) eligibility; retention attempt | **AUTO\*** retention offer can be drafted; the cancel+refund **execution** follows §1 (else ESCALATE) |
+| Change_Non_Shipping_Address / Express_Line | 4 | address/line edit | order state | **AUTO\*** (after mutation per §1) else ESCALATE |
 
-> Note: the ≤20% retention offer on cancellation (THR-06/16) is itself an authorized offer, but because the
-> resolution requires executing a cancellation/refund, the whole sub-type escalates in Phase 1.
+> The ≤20% retention offer on cancellation (THR-06/16) is an **authorized offer** the AI may draft. The
+> account/address/variant **mutation** itself is bounded by §1 (AI must not claim an action it did not cause).
 
 ### 2C. INQUIRY (n=89) — informational (highest automation value, lowest risk)
 | Customer_Request | n | Real behavior | Authorized content | AI action |
@@ -87,7 +97,7 @@ route to human; **AUTO\*** = auto only after a grounded eligibility/threshold ch
 | **Ask_About_Delivery_Status** (WISMO) | 45 | provide tracking + ETA (33); late-shipment discount (6) | Tracking status + ETA from Selless/carrier; if late (THR-09 >21d / THR-10 >35d) may offer compensation (THR-08 ≤50%) | **AUTO** for status; **AUTO\*** if compensation triggered, else ESCALATE |
 | **Ask_About_Order** | 29 | order details, tracking | Order/status facts from Selless | **AUTO** |
 | **Ask_About_Policy** | 5 | policy explanation | Cited KB policy | **AUTO** |
-| **Ask_About_Product** | 6 | product info | Cited product KB | **AUTO** |
+| **Ask_About_Product** | 6 | product info | Product facts via a **scoped product-info API with limits** (Q3 — analogous to the customer-info API: field-whitelisted, rate-limited, audited), plus cited product KB | **AUTO** (within API limits) |
 | **Ask_About_Promotion** | 3 | promo info | Cited promo/KB | **AUTO** (do not invent promo terms) |
 
 ---
@@ -109,14 +119,25 @@ route to human; **AUTO\*** = auto only after a grounded eligibility/threshold ch
 
 ---
 
-## 4. OPEN — needs user/CS-lead confirmation
-1. **Are `change_request` flows in Phase-1 AI scope at all?** Data says they require ops execution → current
-   rule = ESCALATE all. Confirm (vs a future ops-action phase).
-2. **"Review" semantics** — confirm this `Customer_Request` value means "route to SCE/human review" (the data
-   supports it). If so, it is a hard escalate.
-3. **Eligibility data availability** — does Selless expose warranty window (purchase/delivery dates),
-   prior-remediation state ("offered 50%/replacement before?"), and variant stock? The AUTO\* rows depend on
-   it; if unavailable, those rows degrade to ESCALATE.
-4. **Full_Refund** — confirm full refund always needs human authorization + evidence (current rule = ESCALATE).
-5. **Threshold authority** — confirm the AI may commit up to THR-05/06/07/08 **without** per-case human sign-off
-   when eligibility is grounded (the whole point of automating the offer flow).
+## 4. Resolved (2026-06-03) + remaining clarifications
+
+**Resolved by user:**
+- **Q1 — change_request IN SCOPE.** Handled via existing templates; remaining sub-question is the
+  execution boundary (§1) — does the AI trigger the Selless mutation or draft after ops executes?
+- **Q2 — "Review" has NO flow yet.** Confirmed Phase-1 gap (COVERAGE-MAP: product-review-related complaint,
+  12%, no dedicated template). → ESCALATE until CS team defines the flow.
+- **Q3 — product info via a scoped, limited API** (analogous to the customer-info API: whitelist + rate
+  limit + audit). Eligibility/product data IS API-accessible within limits → AUTO\* rows are viable.
+- **Q4 — Full_Refund is allowed when it follows the Flow + policy** with stricter evidence checks (not a
+  blanket escalate).
+- **Q5 — AI may commit up to policy thresholds (THR-05/06/07/08) without per-case human sign-off**, as long
+  as it follows policy; out-of-policy → human.
+
+**Remaining clarifications (smaller, for replan):**
+1. **change_request execution boundary (§1)** — confirm model (a) draft-after-ops-mutation vs (b)
+   AI-triggered authorized Selless action. This decides whether AUTO\* drafts may assert "we've canceled/updated".
+2. **Eligibility fields surface** — confirm the Selless/MCP exposes: warranty window (purchase/delivery
+   dates, THR-03/04), prior-remediation state ("offered 50%/replacement before?"), variant stock, and the
+   product-info API (Q3). The AUTO\* rows degrade to ESCALATE for any field not available.
+3. **Evidence handling** — for Full_Refund / evidence-gated complaint paths, confirm how photos/labels are
+   received + verified (human-in-loop vs automated check).
