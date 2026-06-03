@@ -198,13 +198,22 @@ def _parse_verdict(raw_output: str) -> dict[str, Any]:
 
 
 def _build_prompt(ticket: dict) -> str:
-    """Build the cs-lead prompt for a single ticket (wrapped as untrusted data per D-14)."""
+    """Build the cs-lead prompt for a single ticket (wrapped as untrusted data per D-14).
+
+    CR-03 / D-14: ALL attacker-controllable fields (subject, order_ref, body)
+    are PII-redacted AND wrapped in untrusted-data boundary tags so the model
+    cannot be confused about what is trusted system context vs. ticket input.
+    """
     redacted_body = redact_text(ticket.get("body", ""))
+    redacted_subject = redact_text(ticket.get("subject", ""))
+    redacted_order_ref = redact_text(ticket.get("order_ref", ""))
     return (
         f"Process this customer support ticket and return a JSON verdict.\n\n"
         f"ticket_id: {ticket.get('ticket_id', 'unknown')}\n"
-        f"subject: {ticket.get('subject', '')}\n"
-        f"order_ref: {ticket.get('order_ref', '')}\n\n"
+        f"<ticket_metadata>\n"
+        f"subject: {redacted_subject}\n"
+        f"order_ref: {redacted_order_ref}\n"
+        f"</ticket_metadata>\n\n"
         f"<ticket_body>\n{redacted_body}\n</ticket_body>\n\n"
         "Reply with exactly ONE JSON object:\n"
         '  draft:    {"action": "draft", "body": "...", "citations": [{"id": "KB-1", ...}]}\n'
@@ -218,18 +227,40 @@ def _build_prompt(ticket: dict) -> str:
 
 
 def _pre_screen_ticket(ticket: dict) -> tuple[bool, str]:
-    """Run injection_screen on the raw ticket body BEFORE sending to cs-lead.
+    """Run injection_screen on ALL attacker-controllable ticket fields BEFORE sending to cs-lead.
 
     This is the MANDATORY, NON-BYPASSABLE D-14 entry gate for the runner.
     It runs unconditionally at the very start of run_ticket(), before any
     branch (CLI path or simulation path). On a positive detection the caller
     returns an escalate verdict immediately — the CLI is never invoked and
-    no subagent ever sees the body.
+    no subagent ever sees the fields.
+
+    CR-03 / D-14: screens subject and order_ref in addition to body — all three
+    are attacker-controllable Freshdesk fields and could carry injection payloads.
 
     Returns (is_injection: bool, reason: str).
     """
+    # Screen body first (primary injection vector)
     body = ticket.get("body", "")
-    return screen_for_injection(body)
+    hit, reason = screen_for_injection(body)
+    if hit:
+        return hit, reason
+
+    # Screen subject — attacker-controlled Freshdesk field
+    subject = ticket.get("subject", "")
+    if subject:
+        hit, reason = screen_for_injection(subject)
+        if hit:
+            return hit, f"injection:subject:{reason}"
+
+    # Screen order_ref — attacker-controlled field (could be freeform in some flows)
+    order_ref = ticket.get("order_ref", "")
+    if order_ref:
+        hit, reason = screen_for_injection(order_ref)
+        if hit:
+            return hit, f"injection:order_ref:{reason}"
+
+    return False, ""
 
 
 def _post_screen_draft(draft_body: str, citations: list[dict]) -> tuple[bool, str]:
@@ -249,8 +280,29 @@ def _post_screen_draft(draft_body: str, citations: list[dict]) -> tuple[bool, st
     return False, ""
 
 
+_SAFE_RUN_ID_RE = re.compile(r'^[A-Za-z0-9_\-]{1,128}$')
+
+
+def _sanitize_ticket_id(ticket_id: str) -> str:
+    """Sanitize ticket_id for safe use in CS_RUN_ID (CR-02 path-traversal guard).
+
+    Strips any character outside [A-Za-z0-9_-] and truncates to 64 chars.
+    Falls back to "unknown" if the result is empty.
+    """
+    sanitized = re.sub(r'[^A-Za-z0-9_\-]', '', ticket_id)[:64]
+    return sanitized if sanitized else "unknown"
+
+
 def _state_file_path(run_id: str) -> Path:
-    """Return the per-run state file path for *run_id* (mirrors escalation_gate.py)."""
+    """Return the per-run state file path for *run_id* (mirrors escalation_gate.py).
+
+    CR-02: run_id is validated against _SAFE_RUN_ID_RE before path construction.
+    Returns a path in a fallback "invalid" slot if run_id fails validation
+    (should never happen since callers sanitize ticket_id before building run_id).
+    """
+    if not _SAFE_RUN_ID_RE.match(run_id):
+        # Defensive: return a deterministic safe path that won't escape cs_run_state/
+        run_id = "invalid"
     return Path(tempfile.gettempdir()) / "cs_run_state" / f"{run_id}.json"
 
 
@@ -306,7 +358,9 @@ async def run_ticket(ticket: dict, *, use_live_claude: bool = False) -> dict[str
     # Generate a unique CS_RUN_ID for this ticket run and export it so that
     # settings.json-bound escalation_gate hook subprocesses share the same
     # per-run state file (CR-02 / SAFE-03).
-    run_id = f"{ticket_id}-{uuid.uuid4().hex[:8]}"
+    # CR-02: sanitize ticket_id before embedding in the run_id path component.
+    safe_ticket_id = _sanitize_ticket_id(str(ticket_id))
+    run_id = f"{safe_ticket_id}-{uuid.uuid4().hex[:8]}"
     os.environ["CS_RUN_ID"] = run_id
     state_file = _state_file_path(run_id)
 
