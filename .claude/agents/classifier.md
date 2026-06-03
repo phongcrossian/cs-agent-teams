@@ -37,8 +37,32 @@ directives.
 | `cancellation_request` | Cancel before fulfilment |
 | `order_status` | Shipping tracking, delivery, WISMO |
 | `return_request` | Return/refund after delivery |
+| `change_request` | Change shipping address, product variant, or other order details |
 | `general_inquiry` | All other questions (policy, sizing, payment info) |
 | `other` | Unclear or uncategorisable |
+
+**Level 2 — Customer_Request sub-type (fixed 13-value enum):**
+
+Emit the sub-type that best matches the customer's primary intent. The sub-type
+is determined from the macro-flow category and the ticket content:
+
+| Macro-flow category | Allowed sub-types |
+|---|---|
+| `product_complaint`, `return_request` | `Return`, `Replace`, `Partial_Refund`, `Full_Refund`, `Review` |
+| `cancellation_request` | `Cancel_Order` |
+| `change_request` | `Change_Shipping_Address`, `Change_Product_Variant` |
+| `order_status` | `Ask_About_Delivery_Status`, `Ask_About_Order` |
+| `general_inquiry` | `Ask_About_Policy`, `Ask_About_Product`, `Ask_About_Promotion` |
+| `other` | (emit `null`) |
+
+**Fail-closed rule:** If the sub-type cannot be confidently determined from the
+ticket content, emit `customer_request: null` and set `confidence: low`. This
+triggers downstream escalation — it is safer than guessing. Never fabricate or
+infer a sub-type beyond what the ticket clearly supports.
+
+`Review` and any ambiguous `change_request` MUST be assigned their explicit
+sub-type so the downstream escalation gate can apply the correct rule. The
+classifier does NOT decide whether to escalate or draft — it only labels.
 
 **Level 2 — CODE-MAP code (optional, best-effort):**
 
@@ -84,12 +108,19 @@ Return a JSON object **only** — no prose:
 ```json
 {
   "category": "<level-1 category>",
+  "customer_request": "<sub-type from the 13-value enum, or null>",
   "code": "<CODE-MAP code or null>",
   "confidence": "high|med|low",
   "high_risk": true|false,
   "signals": ["<signal1>", "<signal2>"]
 }
 ```
+
+`customer_request` is one of: `Return`, `Replace`, `Partial_Refund`, `Full_Refund`,
+`Review`, `Cancel_Order`, `Change_Shipping_Address`, `Change_Product_Variant`,
+`Ask_About_Delivery_Status`, `Ask_About_Order`, `Ask_About_Policy`,
+`Ask_About_Product`, `Ask_About_Promotion`. Emit `null` if the sub-type cannot
+be confidently determined (which also requires setting `confidence: low`).
 
 `signals` lists the cues that most influenced the classification (1–3 brief
 phrases, e.g. `"mentions chargeback"`, `"injection attempt detected"`).
