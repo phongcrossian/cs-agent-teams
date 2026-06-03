@@ -35,7 +35,7 @@ Requirements for the initial release. Each maps to roadmap phases.
 - [ ] **SAFE-01**: An offline evaluation harness scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference), reporting faithfulness/correctness metrics
 - [ ] **SAFE-02**: Go-live is gated on the offline-eval score meeting a defined quality bar
 - [ ] **SAFE-03**: A guardrail layer auto-routes high-risk tickets (money/refund, legal/complaints, complex/ambiguous) to a human agent instead of auto-answering
-- [ ] **SAFE-04**: An output guard blocks commitment-language (e.g. promising refunds/actions) the system is not authorized to make
+- [x] **SAFE-04**: An output guard blocks commitment-language (e.g. promising refunds/actions) the system is not authorized to make
 - [ ] **SAFE-05**: A staged rollout control sends AI replies to a configurable percentage of volume (5% → 100%) with deterministic, stable bucketing
 - [ ] **SAFE-06**: A live quality dashboard monitors AI reply performance, and a kill-switch can immediately halt auto-sending
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-01 | Phase 5 | Pending |
 | SAFE-02 | Phase 5 | Pending |
 | SAFE-03 | Phase 4 | Pending |
-| SAFE-04 | Phase 4 | Pending |
+| SAFE-04 | Phase 4 | Complete |
 | SAFE-05 | Phase 7 | Pending |
 | SAFE-06 | Phase 6 | Pending |
 

@@ -91,7 +91,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-03-PLAN.md — Local PoC runner (DRY_RUN, via claude CLI + settings.json hooks) + INTEGRATED mock-LLM e2e proving high-risk/injection/un-cited drafts reach submit_reply and are blocked→escalate through the real bound chain + settings-hook-binding structural assertion (design §7/§4a) + blocking human-verify (package legitimacy + auth/env) (Wave 4)
 - [x] 04-04-PLAN.md — Gap closure (CR-01/CR-03/CR-04-hook/CR-05): fix PreToolUse exit codes 1→2 in pre_send_guard + grounding_check so they actually BLOCK submit_reply; close grounding_check empty-citation bypass (≥1 citation per D-11); injection_screen._extract_body fail-closed on missing body; pii_redact error path stops corrupting payload + documents D-04 PostToolUse limitation (Wave 5)
 - [x] 04-05-PLAN.md — Gap closure (CR-02/CR-04-deploy/test-gap): stateful final-risk veto via per-run CS_RUN_ID state file (PostToolUse/SubagentStop write, PreToolUse@submit_reply read, fail-closed) restoring SAFE-03; mandatory non-bypassable runner injection pre-screen on the real path + subagent binding restoring SAFE-04; subprocess test suite asserting deployed exit-code contract (returncode==2/0) for every PreToolUse hook (Wave 6)
-- [ ] 04-06-PLAN.md — REOPEN: deterministic authorized_offer module (.claude/hooks/authorized_offer.py) — §0 authorized/unauthorized test + per-sub-type template registry + THR-05/06/07/08 caps + RD-Q2 eligibility STUB; exhaustive RULES §2 unit tests (SAFE-04, Wave 7)
+- [x] 04-06-PLAN.md — REOPEN: deterministic authorized_offer module (.claude/hooks/authorized_offer.py) — §0 authorized/unauthorized test + per-sub-type template registry + THR-05/06/07/08 caps + RD-Q2 eligibility STUB; exhaustive RULES §2 unit tests (SAFE-04, Wave 7)
 - [x] 04-07-PLAN.md — REOPEN: classifier emits level-2 customer_request sub-type (13-value RULES §2 enum), Haiku preserved, additive verdict schema; classify-ticket skill + contract test (REP-01, Wave 7)
 - [ ] 04-08-PLAN.md — REOPEN: escalation_gate.py + operational_action trigger (Review/Full_Refund/asserting-change_request per RD-Q1) keeping all existing triggers; subprocess exit-2 proofs (SAFE-03/REP-01, Wave 8)
 - [ ] 04-09-PLAN.md — REOPEN (load-bearing): pre_send_guard.py replaces block-all with the D-26 authorized-offer test via authorize_offer; exit-0 for in-policy templated offers / exit-2 for every unauthorized axis; never auto-strip, fail-closed; subprocess contract suite (SAFE-04, Wave 8)
@@ -143,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 7/12 | In Progress|  |
+| 4. Reply Pipeline + Safety Guards | 8/12 | In Progress|  |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
