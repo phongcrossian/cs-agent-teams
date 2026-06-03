@@ -106,13 +106,25 @@ TEMPLATE_REGISTRY: dict[str, frozenset[str]] = {
         "E12",   # resumed original after no response
     }),
 
-    # INQUIRY — informational sub-types; no template-gated commitment required
-    # Empty set signals "no offer template needed" — §0(b) short-circuits to authorized:no_offer
-    "Ask_About_Delivery_Status": frozenset(),   # WISMO: tracking + optional THR-08 comp
-    "Ask_About_Order":           frozenset(),   # order details from Selless
-    "Ask_About_Policy":          frozenset(),   # cited KB policy
-    "Ask_About_Product":         frozenset(),   # product facts via scoped API
-    "Ask_About_Promotion":       frozenset(),   # cited promo/KB (do not invent terms)
+    # INQUIRY — informational sub-types; no template-gated commitment required.
+    # Ask_About_Delivery_Status (WISMO) may carry a late-ship compensation offer
+    # (THR-08 ≤50%) using shipping-inquiry G-codes. When offered dict is non-empty
+    # it falls through to §0(c)/(d) checks — G-codes are valid templates here.
+    # All other inquiry sub-types have empty sets (no commitment template required).
+    "Ask_About_Delivery_Status": frozenset({
+        # Common-scenario shipping templates (G1–G9) used for WISMO with comp offers
+        "G1", "G2", "G4", "G5", "G6", "G7", "G8", "G9",
+        # DNR templates (tracking + replacement)
+        "G10", "G11", "G13", "G14", "G15",
+        # OOS templates
+        "G3.1", "G3.2",
+        # Test-contract template
+        "G12",
+    }),
+    "Ask_About_Order":           frozenset(),   # order details from Selless; no offer template
+    "Ask_About_Policy":          frozenset(),   # cited KB policy; no offer template
+    "Ask_About_Product":         frozenset(),   # product facts via scoped API; no offer template
+    "Ask_About_Promotion":       frozenset(),   # cited promo/KB; no offer template (do not invent)
 }
 
 # ---------------------------------------------------------------------------
