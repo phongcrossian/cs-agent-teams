@@ -87,7 +87,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 4 plans (4 waves; RE-PLANNED for the Claude Code agent-team architecture — docs/specs/2026-06-02-cs-agent-team-design.md; superseded PydanticAI plans archived in _superseded/; vertical MVP slices over a Wave-0 bootstrap; deterministic safety hooks built before the agent team that composes them)
 - [x] 04-00-PLAN.md — Wave 0 bootstrap: extend src/config.py (Haiku/Sonnet classify/draft/lead models + DRY_RUN, secret-redacted, env-driven for Bedrock) + src/reply_mcp submit_reply chokepoint + .claude/settings.json (register 3 MCPs + bind ALL 5 hooks per design §4a) + .claude/CLAUDE.md team-safety contract + root CLAUDE.md orchestration row + fixtures + RED stubs + settings-hook-binding structural test (Wave 1)
 - [x] 04-01-PLAN.md — Five deterministic hooks (no LLM, mirror loop_guard (bool,reason)): injection_screen + pre_send_guard commitment block (SAFE-04/D-13/D-14) + escalation_gate any-signal-escalates (SAFE-03/D-08/D-09) + grounding_check (REP-03/D-11) + pii_redact (D-04); fail-closed (Wave 2)
-- [ ] 04-02-PLAN.md — Agent team: cs-lead (entry) + classifier/extractor (Haiku, REP-01/02) + drafter/critic (Sonnet, REP-03/04, drafter emits via submit_reply only) + 5 skills incl. reply-pipeline workflow (D-01/D-10/D-12); no Opus; body delimited as untrusted (Wave 3)
+- [x] 04-02-PLAN.md — Agent team: cs-lead (entry) + classifier/extractor (Haiku, REP-01/02) + drafter/critic (Sonnet, REP-03/04, drafter emits via submit_reply only) + 5 skills incl. reply-pipeline workflow (D-01/D-10/D-12); no Opus; body delimited as untrusted (Wave 3)
 - [ ] 04-03-PLAN.md — Local PoC runner (DRY_RUN, via claude CLI + settings.json hooks) + INTEGRATED mock-LLM e2e proving high-risk/injection/un-cited drafts reach submit_reply and are blocked→escalate through the real bound chain + settings-hook-binding structural assertion (design §7/§4a) + blocking human-verify (package legitimacy + auth/env) (Wave 4)
 **UI hint**: no
 
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 2/4 | In Progress|  |
+| 4. Reply Pipeline + Safety Guards | 3/4 | In Progress|  |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
