@@ -1,0 +1,88 @@
+{
+  "mcpServers": {
+    "KnowledgeMCP": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "src.knowledge_mcp.server"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "VOYAGE_API_KEY": "${VOYAGE_API_KEY}"
+      }
+    },
+    "SellessMCP": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "src.selless_mcp.server"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "SELLESS_API_BASE_URL": "${SELLESS_API_BASE_URL}"
+      }
+    },
+    "ReplyMCP": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "src.reply_mcp.server"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "submit_reply",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/grounding_check.py"
+          },
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/pre_send_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/escalation_gate.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/injection_screen.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/escalation_gate.py"
+          },
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/pii_redact.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/escalation_gate.py"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "SEND_MODE": "dry_run"
+  }
+}

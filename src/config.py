@@ -87,6 +87,35 @@ class Settings(BaseSettings):
         description="Throttle window in minutes for per-ticket reply limit",
     )
 
+    # === Phase 4 additions — agent team ==========================================
+
+    # Anthropic API key (NEVER log)
+    anthropic_api_key: str = Field(
+        default="",
+        description="Anthropic API key — NEVER log this value",
+    )
+
+    # Per-stage Claude model assignments (D-03)
+    # Bedrock cut-over: set CLAUDE_CODE_USE_BEDROCK=1 + AWS_* envs; no code change needed
+    claude_model_classify: str = Field(
+        default="claude-haiku-4-5",
+        description="Haiku for classify/extract stages (D-03 — cheap, fast high-frequency hot path)",
+    )
+    claude_model_draft: str = Field(
+        default="claude-sonnet-4-6",
+        description="Sonnet for draft/critic stages (D-03 — near-Opus quality, grounding + citation)",
+    )
+    claude_model_lead: str = Field(
+        default="claude-sonnet-4-6",
+        description="Sonnet for team lead orchestration (W3 fix — no Opus on hot path)",
+    )
+
+    # DRY_RUN flag for agent team (never posts to Freshdesk in PoC)
+    dry_run: bool = Field(
+        default=True,
+        description="DRY_RUN flag for the agent team (never posts to Freshdesk in PoC)",
+    )
+
     # === Phase 3 additions — grounding layer =====================================
 
     # Selless API (D-01, gateway-trust model confirmed 2026-06-02)
@@ -140,14 +169,19 @@ class Settings(BaseSettings):
         return set()
 
     def __repr__(self) -> str:
-        """Never expose api_key, webhook_secret, selless_api_gateway_key, or voyage_api_key."""
+        """Never expose api_key, webhook_secret, selless_api_gateway_key, voyage_api_key, or anthropic_api_key."""
         return (
             f"Settings(send_mode={self.send_mode!r}, "
             f"freshdesk_domain={self.freshdesk_domain!r}, "
             f"database_url={self.database_url!r}, "
             f"selless_api_base_url={self.selless_api_base_url!r}, "
+            f"claude_model_classify={self.claude_model_classify!r}, "
+            f"claude_model_draft={self.claude_model_draft!r}, "
+            f"claude_model_lead={self.claude_model_lead!r}, "
+            f"dry_run={self.dry_run!r}, "
             f"freshdesk_api_key=<REDACTED>, webhook_secret=<REDACTED>, "
-            f"selless_api_gateway_key=<REDACTED>, voyage_api_key=<REDACTED>)"
+            f"selless_api_gateway_key=<REDACTED>, voyage_api_key=<REDACTED>, "
+            f"anthropic_api_key=<REDACTED>)"
         )
 
     model_config = {
