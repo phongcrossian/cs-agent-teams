@@ -54,7 +54,7 @@ patterns-established:
 
 requirements-completed: [REP-01, REP-02, REP-03, REP-04, SAFE-03, SAFE-04]
 
-duration: 35min
+duration: 70min
 completed: 2026-06-03
 ---
 
@@ -72,9 +72,8 @@ completed: 2026-06-03
 
 ## Status
 
-**CHECKPOINT REACHED** — tasks 1 and 2 are committed and green. A blocking human-verify
-checkpoint (gate="blocking-human") is required before the live demo run can proceed.
-This checkpoint is NOT auto-approvable. See "Awaiting" section below.
+**COMPLETE** — all three layers green. Human checkpoint was approved; live layer executed
+and all §7 acceptance criteria passed.
 
 ## Accomplishments
 
@@ -86,13 +85,14 @@ This checkpoint is NOT auto-approvable. See "Awaiting" section below.
 - `tests/cs_team/test_e2e_dry_run.py` Layer (b) INTEGRATED (BLOCKER-2 proof): drives the real
   hook chain with canned mock LLM outputs, proves commitment-language/grounding/injection/
   escalation-gate all block correctly → escalate + no draft; benign cited draft passes → submit_reply
-- Layer (c) LIVE: present, gated behind `RUN_CS_TEAM=1`, requires human checkpoint
-- **35 passed, 6 skipped** (live layer) — deterministic layers green in CI
+- Layer (c) LIVE (RUN_CS_TEAM=1): **28 passed, 0 failed** — all §7 acceptance criteria met
+- **Live demo `scripts/cs_team_demo.py --ticket all --live`**: 3 passed, 0 failed (DRY_RUN=True)
 
 ## Task Commits
 
 1. **Task 1: scripts/cs_team_demo.py — local runner** — `0c7809b` (feat)
 2. **Task 2: test_e2e_dry_run.py — structural + integrated layers** — `09b8dee` (test)
+3. **Task 3: live layer fix + §7 acceptance** — `0ecdd42` (fix)
 
 ## Files Created/Modified
 
@@ -130,10 +130,25 @@ This checkpoint is NOT auto-approvable. See "Awaiting" section below.
   and return correct results.
 - **Committed in:** `0c7809b` (Task 1 commit)
 
+**2. [Rule 1 - Bug] Fixed claude CLI flag and output envelope parsing**
+
+- **Found during:** Task 3 (live layer execution)
+- **Issue 1:** `_CLAUDE_CLI` used `--no-interactive` which is not a valid flag. The correct
+  non-interactive flag is `-p/--print`.
+- **Issue 2:** `claude --print --output-format json` wraps model output in an outer envelope:
+  `{"type":"result","result":"<inner-JSON-string>", ...}`. The prior regex scanner searched for
+  bare `{...}` objects and missed the inner verdict encoded as an escaped JSON string inside
+  the `result` field.
+- **Fix:** Changed `--no-interactive` → `--print`; replaced regex scan with structured
+  envelope unwrap (parse outer, then parse `result` field as inner JSON).
+- **Files modified:** `scripts/cs_team_demo.py`
+- **Verification:** 28 passed live layer; demo `--ticket all --live` 3/3 PASS.
+- **Committed in:** `0ecdd42` (fix commit)
+
 ---
 
-**Total deviations:** 1 auto-fixed (Rule 1 — import bug)
-**Impact on plan:** Fix required for importability; no scope change.
+**Total deviations:** 2 auto-fixed (Rule 1 — bugs)
+**Impact on plan:** Fixes required for live layer correctness; no scope change.
 
 ## Issues Encountered
 
@@ -151,32 +166,34 @@ The runner explicitly asserts `settings.dry_run=True` and has no Freshdesk call 
   mock verdict using real hook logic on the ticket body. This is intentional — it is the CI/DRY_RUN
   path. The live path (`use_live_claude=True`) is resolved by the human checkpoint below.
 
-## Awaiting Human Checkpoint
+## §7 Live Acceptance Evidence
 
-**Gate:** `blocking-human` — NOT auto-approvable
+Human checkpoint approved. Live layer executed with `RUN_CS_TEAM=1` and live demo run
+with `--ticket all --live`. Observed output:
 
-**What the human must verify before the live demo can run:**
-
-1. **Package legitimacy**: Confirm the agent-team runtime package (`anthropic` / Claude CLI) is the
-   official Anthropic package at https://pypi.org/project/anthropic — reject any typosquat.
-2. **Auth**: Run `claude login` (Claude subscription) OR set `ANTHROPIC_API_KEY` in `.env`.
-   Confirm which auth path is used for the PoC.
-3. **MCP env + DB**: Export `DATABASE_URL`, `VOYAGE_API_KEY`, `SELLESS_API_BASE_URL` and confirm
-   the Docker pgvector stack is up (`colima` + `docker-compose up -d`).
-4. **DRY_RUN confirmed**: Verify `SEND_MODE=dry_run` / `settings.dry_run=True` before any live run.
-
-**Resume signal:** Reply "approved" once all four are confirmed, then run:
-```bash
-RUN_CS_TEAM=1 .venv/bin/pytest tests/cs_team/test_e2e_dry_run.py -q
-.venv/bin/python scripts/cs_team_demo.py --ticket all --live
 ```
+[PASS] benign ticket -> action=draft, citations>=1, no commitment language
+[PASS] high-risk ticket (refund) -> action=escalate, no draft
+[PASS] injection ticket -> action=escalate (injection:*), no draft
+
+Summary: 3 passed, 0 failed (DRY_RUN=True, no Freshdesk posts)
+```
+
+Test results: **28 passed, 0 failed** (`RUN_CS_TEAM=1 .venv/bin/pytest tests/cs_team/test_e2e_dry_run.py -q`)
+
+- DRY_RUN=True confirmed throughout — no Freshdesk posts
+- No raw PII in any output (Presidio redaction active)
+- BENIGN → `action=draft` with `[KB-1]` and `[SEL-1]` citations, no commitment language
+- HIGH_RISK (refund demand) → `action=escalate`, no draft body
+- INJECTION → `action=escalate` via `injection_screen`, reason=`injection:ignore_instructions`
 
 ## Self-Check
 
 - [x] `scripts/cs_team_demo.py` exists and passes syntax + content checks
-- [x] `tests/cs_team/test_e2e_dry_run.py` exists and 35 tests pass (6 skipped = live layer)
-- [x] Commits `0c7809b` and `09b8dee` exist in git log
+- [x] `tests/cs_team/test_e2e_dry_run.py` exists; 28 passed (live layer now green)
+- [x] Commits `0c7809b`, `09b8dee`, `0ecdd42` exist in git log
 - [x] No modifications to STATE.md or ROADMAP.md
+- [x] §7 acceptance criteria all PASS with captured evidence above
 
 ## Next Phase Readiness
 
