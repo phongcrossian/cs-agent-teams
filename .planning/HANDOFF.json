@@ -1,43 +1,44 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-02T02:15:15.210Z",
-  "phase": "03",
-  "phase_name": "grounding-layer-selless-mcp-knowledge-rag-mcp",
-  "phase_dir": ".planning/phases/03-grounding-layer-selless-mcp-knowledge-rag-mcp",
+  "timestamp": "2026-06-03T09:33:51.144Z",
+  "phase": "4",
+  "phase_name": "Reply Pipeline + Safety Guards (REOPENING for authorized-offer guard)",
+  "phase_dir": ".planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
-  "workflow": "gsd-plan-phase 3",
-  "workflow_stage": "research",
   "completed_tasks": [
-    {"id": 1, "name": "Initialize plan-phase (init.plan-phase JSON parsed)", "status": "done"},
-    {"id": 2, "name": "Load 03-CONTEXT.md (16 locked decisions D-01..D-16)", "status": "done"},
-    {"id": 3, "name": "Resolve gates: MVP_MODE=true, AI-SPEC skipped (user), research=yes (user)", "status": "done"},
-    {"id": 4, "name": "Spawn gsd-phase-researcher for 03-RESEARCH.md", "status": "in_progress", "progress": "First run did 42 tool calls then died on socket error WITHOUT writing the file. Resumed in background (agentId a0dab2a27581c1a27) to write the file from existing context. As of pause, 03-RESEARCH.md still MISSING on disk."}
+    {"id": 1, "name": "Phase 5 discuss-phase: 05-CONTEXT.md + DISCUSSION-LOG (incl. D-25..D-28 authorized-offer guard)", "status": "done", "commit": "f7dd671"},
+    {"id": 2, "name": "Live-verified agent team has NO property-update capability; reply_mcp = submit_reply only", "status": "done"},
+    {"id": 3, "name": "Live-verified ticket 7732073 reply == template B7 verbatim (50% refund + 40% discount = correct templated flow)", "status": "done"},
+    {"id": 4, "name": "Decision: reopen Phase 4 to make commitment guard template + threshold aware", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 4, "name": "Confirm 03-RESEARCH.md written (## RESEARCH COMPLETE + ## Validation Architecture section)", "status": "in_progress"},
-    {"id": 5, "name": "Step 5.5: Create 03-VALIDATION.md from RESEARCH.md Validation Architecture (Nyquist enabled)", "status": "not_started"},
-    {"id": 6, "name": "Step 7.8: Spawn gsd-pattern-mapper → 03-PATTERNS.md (enabled)", "status": "not_started"},
-    {"id": 7, "name": "Step 8: Spawn gsd-planner (model=opus, MVP vertical-slice mode) → PLAN.md files", "status": "not_started"},
-    {"id": 8, "name": "Step 10-12: gsd-plan-checker verification + revision loop (max 3)", "status": "not_started"},
-    {"id": 9, "name": "Step 13/13a: Requirements + Decision coverage gates", "status": "not_started"},
-    {"id": 10, "name": "Step 13b-13d: Record planning in STATE.md, annotate ROADMAP, commit plans", "status": "not_started"}
+    {"id": 5, "name": "Reopen Phase 4: ROADMAP [x]->[ ], revise success-criterion #4, set STATE phase=4", "status": "not_started"},
+    {"id": 6, "name": "Re-run scripts/fetch_golden_replies.py over BOTH export CSVs (uv was not on PATH in bg shell -> use .venv/bin/python)", "status": "not_started"},
+    {"id": 7, "name": "Analyze all ~63 tickets: join CS-agent properties + first public reply -> template (A/B/C code) + offer (refund%/discount%/replacement) + eligibility signals", "status": "not_started"},
+    {"id": 8, "name": "Derive authorized-offer rule set (case taxonomy -> template -> offer/threshold -> draft-vs-escalate) and write to Phase 4 dir", "status": "not_started"},
+    {"id": 9, "name": "Replan Phase 4 (pre_send_guard template/threshold-aware + drafter template selection); redefine Phase-5 gate per D-27", "status": "not_started"}
   ],
   "blockers": [
-    {"description": "gsd-phase-researcher died on socket error after 42 tool calls without writing 03-RESEARCH.md; resumed in background but unconfirmed", "type": "technical", "workaround": "On resume: check if 03-RESEARCH.md exists. If yes and valid, continue from step 5.5. If still missing, re-run /gsd:plan-phase 3 --research (researcher re-investigates) OR check background agent a0dab2a27581c1a27."},
-    {"description": "Selless API endpoints/auth/field shapes UNCONFIRMED (D-01/D-05) — needs user-supplied API docs/credentials", "type": "human_action", "workaround": "Planner designs clean client seam + mock/stub for tests; endpoints filled in later. Not blocking for planning."}
+    {"description": "Background fetch failed: `uv` not found on PATH in the background bash shell", "type": "technical", "workaround": "Run with /Users/admin/work/phong/grok-agent-teams/.venv/bin/python scripts/fetch_golden_replies.py <csv>. Output goes to /tmp/cs_golden_analysis.jsonl (ephemeral - re-run on resume)."},
+    {"description": "GSD has no native 'phase reopen' command (only add/insert/remove/complete/edit)", "type": "technical", "workaround": "Reopen by editing ROADMAP.md checkbox + progress row + STATE.md by hand, OR insert phase 4.1 (INSERTED). User asked to reopen Phase 4 literally."}
   ],
   "human_actions_pending": [
-    {"action": "Provide Selless API documentation + credentials", "context": "D-01/D-05: Selless API is 'built for platform not AI', scattered, unconfirmed. Needed before the Selless MCP can connect to real data (tests use mock/stub until then).", "blocking": false}
+    {"action": "Confirm reopen-Phase-4 vs insert-4.1 if hand-editing ROADMAP feels wrong", "context": "Phase 4 is marked complete+verified+secured; its success criterion #4 (block ALL commitment language) is the thing being revised", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Skip AI-SPEC gate, continue planning", "rationale": "Stack already locked in CLAUDE.md (FastMCP, pgvector, Voyage); eval harness is Phase 5. Non-blocking.", "phase": "03"},
-    {"decision": "Research before planning", "rationale": "Selless API is the #1 research risk (D-01/D-05); RAG/pgvector/Voyage params need confirmation.", "phase": "03"},
-    {"decision": "MVP mode active (vertical slices)", "rationale": "ROADMAP has **Mode:** mvp for Phase 3; aligns with demonstrable end-state (standalone MCP smoke test).", "phase": "03"}
+    {"decision": "Reply scoring is reference-aware but NOT binding similarity to past replies", "rationale": "ROADMAP goal; past replies can be wrong", "phase": "5"},
+    {"decision": "Two-track eval: (A) classification vs CS-agent properties, (B) first public reply quality", "rationale": "mirrors real CS workflow read->lookup->fill properties->reply", "phase": "5"},
+    {"decision": "Make commitment guard template + threshold aware (D-26); redefine hard gate to '0 UNAUTHORIZED commitments' (D-27)", "rationale": "real correct flow USES templated refund/discount/replacement offers (template B7); block-all would escalate the entire complaint/cancellation/shipping volume", "phase": "4"}
   ],
-  "uncommitted_files": [".omc/project-memory.json", ".omc/sessions/da4c6059-4407-454d-ad84-ec4188ec4425.json", ".omc/state/mission-state.json", ".planning/config.json"],
-  "next_action": "Check whether .planning/phases/03-grounding-layer-selless-mcp-knowledge-rag-mcp/03-RESEARCH.md now exists. If valid, resume /gsd:plan-phase 3 at step 5.5 (VALIDATION.md). If missing, re-run /gsd:plan-phase 3 --research.",
-  "context_notes": "Mid /gsd-plan-phase 3. CONTEXT.md fully read; phase is dual-MCP grounding infra (Selless transactional MCP + Knowledge RAG MCP) with 16 locked decisions. User chose research-first + skip-AI-SPEC. Researcher was the only thing in flight; its output file was not confirmed written due to a socket error. Everything downstream (validation/pattern-map/plan/check/gates) is untouched."
+  "uncommitted_files": [
+    "scripts/fetch_golden_replies.py (new helper, not yet committed)",
+    ".env.prd (UNTRACKED - contains Freshdesk API key + DB creds; DO NOT COMMIT)",
+    ".planning/phases/01-.../snapshots/60000264798_tickets-*.csv and 60000264802_tickets-*.csv (UNTRACKED - customer PII; DO NOT COMMIT)",
+    "agent-platform.md (untracked, unrelated)"
+  ],
+  "next_action": "Reopen Phase 4 in ROADMAP.md + STATE.md, then re-run scripts/fetch_golden_replies.py with .venv/bin/python over both export CSVs to get the first public replies.",
+  "context_notes": "Mid-investigation triggered by Phase-5 discuss. Pivotal finding: the business's correct CS flow resolves the highest-volume category (product complaint) with policy-bounded templated offers (refund/discount/replacement), so Phase-4 D-13 (block-all commitment) is too blunt and would escalate everything. Reopening Phase 4 to make the guard template+threshold aware, using the 2 real Freshdesk exports (~63 complaint/return tickets) to derive the rules. Phase-1 templates (A1-A9, B1-B13, C1) + POLICY-THRESHOLD-INDEX (THR-05/06/07/08, warranty THR-03/04) are authoritative. Gate redefinition captured in 05-CONTEXT.md D-25..D-28."
 }
