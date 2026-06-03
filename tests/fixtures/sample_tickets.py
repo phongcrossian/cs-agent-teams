@@ -49,6 +49,9 @@ HIGH_RISK_TICKET: dict = {
     ),
     "from_email": "mark.smith@example.com",
     "order_ref": "ORD-20240430-5512",
+    # CR-04: category is what the classifier emits; simulation escalates on this,
+    # NOT on commitment-language scan of the ticket body (that check belongs on drafts).
+    "category": "refund",
 }
 
 # ---------------------------------------------------------------------------

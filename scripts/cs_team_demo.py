@@ -444,35 +444,53 @@ def _simulate_verdict(ticket: dict) -> dict[str, Any]:
     This is NOT a mock of the hooks — it calls the actual hook check functions
     that the settings.json-bound chain also calls. The integrated test layer (b)
     drives this path with canned mock LLM outputs to prove the chain blocks.
+
+    CR-04: High-risk detection is based on ticket *category/metadata*, NOT on
+    commitment-language scan of the ticket body. In production, pre_send_guard.py
+    checks commitment language only on the *draft* body — never on the inbound
+    ticket. Checking `check_commitment_language(ticket_body)` here was a
+    simulation divergence: it caused false escalations when a customer *mentioned*
+    words like "refund" in their message, while missing commitment language
+    injected into a mock draft. The correct production-aligned flow is:
+      1. Check ticket category/metadata for known high-risk labels.
+      2. Generate a mock draft.
+      3. Run _post_screen_draft (grounding + commitment-language) on the DRAFT.
     """
     ticket_id = ticket.get("ticket_id", "unknown")
-    body = ticket.get("body", "")
 
-    # HIGH_RISK: body itself contains commitment language keywords
-    commitment_hit, commitment_reason = check_commitment_language(body)
-    if commitment_hit:
+    # HIGH_RISK: use ticket category/metadata, not commitment-language scan on body.
+    # This mirrors production: high-risk routing is a classifier decision based on
+    # category, not a regex scan of what the customer wrote.
+    _HIGH_RISK_CATEGORIES = frozenset({
+        "refund", "money", "legal", "complaint", "complex", "exchange",
+        "chargeback", "dispute",
+    })
+    category = str(ticket.get("category", "")).lower().strip()
+    if category in _HIGH_RISK_CATEGORIES:
         logger.info(
-            "simulate_verdict: commitment language in ticket body — escalating ticket_id=%s",
+            "simulate_verdict: high-risk category=%r — escalating ticket_id=%s",
+            category,
             ticket_id,
         )
         return {
             "action": _ESCALATE_ACTION,
-            "reason": commitment_reason,
+            "reason": "escalate:high_risk_category",
             "signals": {"high_risk_category": True},
         }
 
-    # BENIGN: produce a minimal mock draft (the real LLM would produce this)
+    # BENIGN: produce a minimal mock draft (the real LLM would produce this).
     # Draft must pass the hook chain: citations present + no commitment language.
     mock_citations = [{"id": "KB-1", "text": "Order status policy [KB-1]"}]
-    redacted_body = redact_text(body)
     mock_draft = (
-        f"Thank you for contacting us about your order. "
-        f"Based on our records [KB-1], your order is currently being processed. "
-        f"You will receive a shipping confirmation shortly.\n\n"
-        f"Best regards,\nCustomer Support"
+        "Thank you for contacting us about your order. "
+        "Based on our records [KB-1], your order is currently being processed. "
+        "You will receive a shipping confirmation shortly.\n\n"
+        "Best regards,\nCustomer Support"
     )
 
-    # Post-screen mock draft through real hook functions
+    # CR-04: Post-screen the DRAFT body through the real hook functions.
+    # This is where commitment-language and grounding checks belong — on the
+    # draft output, not on the inbound ticket body.
     should_esc, esc_reason = _post_screen_draft(mock_draft, mock_citations)
     if should_esc:
         return {
