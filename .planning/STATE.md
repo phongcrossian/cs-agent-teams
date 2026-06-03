@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
-last_updated: "2026-06-03T10:35:17.401Z"
-last_activity: 2026-06-03 -- Phase 04 planning complete
+last_updated: "2026-06-03T10:46:12.859Z"
+last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 22
   percent: 43
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
-**Current focus:** Phase 4 (REOPENED) — make the commitment guard template/threshold-aware; deriving authorized-offer rules from real Freshdesk exports. Phase 5 (eval gate) is blocked on this.
+**Current focus:** Phase 04 — reply-pipeline-classify-extract-ground-draft-safety-guards
 
 ## Current Position
 
-Phase: 4 (reopened)
-Plan: Not started (replan pending rule derivation)
+Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
+Plan: 2 of 12
 Status: Ready to execute
-Last activity: 2026-06-03 -- Phase 04 planning complete
+Last activity: 2026-06-03
 
-Progress: [██████░░░░] 43% (Phase 4 reopened)
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [██████░░░░] 43% (Phase 4 reopened)
 | Phase 03-grounding-layer-selless-mcp-knowledge-rag-mcp P01 | 35 | 2 tasks | 10 files |
 | Phase 03-grounding-layer-selless-mcp-knowledge-rag-mcp P03 | 35 | 2 tasks | 13 files |
 | Phase 03-grounding-layer-selless-mcp-knowledge-rag-mcp P02 | 45 | 2 tasks | 9 files |
+| Phase 04 P07 | 8 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -143,6 +144,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T09:33:51.144Z
+Last session: 2026-06-03T10:46:12.851Z
 Stopped at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
-Resume file: .planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards/.continue-here.md
+Resume file: None
