@@ -125,6 +125,23 @@ soft quality is judged by the LLM critic.
 
 ---
 
+## 4a. Hook enforcement mechanism — how guards become non-bypassable (resolves open Q3/Q4)
+
+Claude Code hooks fire on **tool/lifecycle events** (`PreToolUse`, `PostToolUse`, `SubagentStop`, `UserPromptSubmit`, `Stop`), not on arbitrary "after a stage" points. So enforcement is designed around a **single guarded chokepoint**:
+
+- **Transport = `settings.json` hooks** (shell→Python), not Agent-SDK programmatic callbacks. Reason: the hooks travel *with* the `.claude/` kit, so the same enforcement works under the local `claude` CLI run **and** later inside the `samx` platform harness (which wraps `claude-agent-sdk` and shells to `claude`). Portable + self-contained.
+
+- **The ONLY way to emit a customer draft is the `submit_reply(body, citations)` tool** (a tiny local MCP tool in the kit). Because no other path produces a customer-facing reply, a hook that vetoes this tool is a hard gate the lead/subagents cannot route around.
+  - `PreToolUse` on `submit_reply` runs, in order: **`grounding_check.py`** (every claim maps to a citation, D-11) → **`pre_send_guard.py`** (no commitment language, D-13) → **final risk check** (any accumulated escalation signal set?). Any failure → hook **blocks** the tool (exit 2) → the runner interprets the block as the **`escalate`** verdict (D-10: no draft emitted).
+
+- **`injection_screen.py`** = `UserPromptSubmit` hook (or a runner-side screen) on the inbound ticket body before any agent sees it; suspicion → escalate (D-14). Body is also delimited as untrusted data inside every agent prompt.
+
+- **`escalation_gate.py`** = `PostToolUse`/`SubagentStop` hook on the classifier/extractor results — it records risk signals (low-confidence, ambiguous category, high-risk marker, missing key, conflict flag, stale-only) into the run's escalation state. The **hard** guarantee is the `submit_reply` final-risk check above; the gate firing earlier is an optimization (early exit, save tokens), not the sole safety net.
+
+- **`pii_redact.py`** = `PostToolUse` hook (matched broadly) redacting before any log/trace sink (D-04).
+
+**Enforceability test obligation (closes BLOCKER 1 & 2):** the plan MUST (a) bind **all five** hooks in `settings.json` with the events above and assert that structurally in a test, and (b) include an **integrated** proof — drive `cs-lead` with a stub/mock LLM (or the live layer) so a high-risk / injection / un-cited-draft ticket reaches `submit_reply` and is **blocked → escalate** — not merely call each hook function in isolation.
+
 ## 5. Model assignment & provider
 
 - **Per stage:** classify / extract / risk → **Haiku 4.5**; draft + critic → **Sonnet 4.6**.
