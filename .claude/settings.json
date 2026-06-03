@@ -83,6 +83,7 @@
     ]
   },
   "env": {
-    "SEND_MODE": "dry_run"
+    "SEND_MODE": "dry_run",
+    "CS_RUN_ID": "${CS_RUN_ID}"
   }
 }
