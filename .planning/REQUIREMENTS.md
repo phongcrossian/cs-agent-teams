@@ -26,7 +26,7 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 - [x] **REP-01**: AI re-classifies an incoming email/ticket into the correct support category
 - [ ] **REP-02**: AI extracts the key info needed to answer (order ref, customer, issue type)
-- [ ] **REP-03**: AI drafts a reply grounded in retrieved order data and knowledge-base content (no ungrounded claims)
+- [x] **REP-03**: AI drafts a reply grounded in retrieved order data and knowledge-base content (no ungrounded claims)
 - [ ] **REP-04**: AI runs a self-critique pass scoring the draft against the quality rubric before any send
 - [x] **REP-05**: AI posts the approved reply into the correct existing Freshdesk ticket via API, idempotently (no duplicate sends)
 
@@ -79,7 +79,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEL-04 | Phase 3 | Complete |
 | REP-01 | Phase 4 | Complete |
 | REP-02 | Phase 4 | Pending |
-| REP-03 | Phase 4 | Pending |
+| REP-03 | Phase 4 | Complete |
 | REP-04 | Phase 4 | Pending |
 | REP-05 | Phase 2 | Complete |
 | SAFE-01 | Phase 5 | Pending |
