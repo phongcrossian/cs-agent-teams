@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
 - [x] **Phase 2: Freshdesk I/O Layer & Pipeline Backbone** - Isolated, rate-limit-aware Freshdesk client + queued intake with idempotent, loop-safe posting (completed 2026-06-01)
 - [x] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB (completed 2026-06-02)
-- [x] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards (completed 2026-06-03)
+- [ ] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards (first pass completed 2026-06-03; **REOPENED 2026-06-03** — commitment guard must become template/threshold-aware; success criterion #4 revised)
 - [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
 - [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
 - [ ] **Phase 7: Staged Rollout (5% → 100%)** - Controlled, quality-gated exposure scaling from 5% to full volume
@@ -83,7 +83,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. An incoming ticket is re-classified into the correct support category with a confidence signal, and the order ref / customer / issue type are extracted
   2. The orchestrator produces a draft grounded in retrieved order data + KB content with citations, making no ungrounded claims, and runs a self-critique pass scoring it against the quality rubric before any send
   3. High-risk tickets (money/refund, legal/complaints, complex/ambiguous) are auto-routed to a human — any high-risk signal escalates the whole ticket — rather than auto-answered
-  4. An output guard blocks commitment language about refunds/credits/charges/order changes regardless of category, and email body content is treated as data (delimited, injection-screened) not instructions
+  4. An output guard blocks **unauthorized** commitments — offers OUTSIDE an approved template or BEYOND the policy threshold for the verified order's eligibility — while permitting authorized **templated** offers within policy (REVISED 2026-06-03; the original "block ALL commitment language regardless of category" was found to conflict with the real CS workflow, which resolves the highest-volume flows with policy-bounded templated refund/discount/replacement offers); and email body content is treated as data (delimited, injection-screened) not instructions
 **Plans**: 6 plans (6 waves; RE-PLANNED for the Claude Code agent-team architecture — docs/specs/2026-06-02-cs-agent-team-design.md; superseded PydanticAI plans archived in _superseded/; vertical MVP slices over a Wave-0 bootstrap; deterministic safety hooks built before the agent team that composes them)
 - [x] 04-00-PLAN.md — Wave 0 bootstrap: extend src/config.py (Haiku/Sonnet classify/draft/lead models + DRY_RUN, secret-redacted, env-driven for Bedrock) + src/reply_mcp submit_reply chokepoint + .claude/settings.json (register 3 MCPs + bind ALL 5 hooks per design §4a) + .claude/CLAUDE.md team-safety contract + root CLAUDE.md orchestration row + fixtures + RED stubs + settings-hook-binding structural test (Wave 1)
 - [x] 04-01-PLAN.md — Five deterministic hooks (no LLM, mirror loop_guard (bool,reason)): injection_screen + pre_send_guard commitment block (SAFE-04/D-13/D-14) + escalation_gate any-signal-escalates (SAFE-03/D-08/D-09) + grounding_check (REP-03/D-11) + pii_redact (D-04); fail-closed (Wave 2)
@@ -137,7 +137,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 6/6 | Complete   | 2026-06-03 |
-| 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
+| 4. Reply Pipeline + Safety Guards | 6/6 | Reopened — guard revision (template/threshold-aware) | 2026-06-03 |
+| 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |

@@ -32,3 +32,8 @@ htmlcov/
 # Editor
 .vscode/
 .idea/
+.env.prd
+**/.golden-analysis.jsonl
+**/snapshots/**/*.csv
+**/ticket-sample/
+/tmp/cs_golden_analysis.jsonl

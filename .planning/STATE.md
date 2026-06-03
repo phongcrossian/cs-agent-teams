@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-06-03T09:09:53.569Z"
+stopped_at: Phase 4 reopened — authorized-offer guard (template/threshold-aware)
+last_updated: "2026-06-03T09:33:51.144Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 21
   completed_plans: 21
-  percent: 57
+  percent: 43
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
-**Current focus:** Phase 5 — offline evaluation harness (the gate)
+**Current focus:** Phase 4 (REOPENED) — make the commitment guard template/threshold-aware; deriving authorized-offer rules from real Freshdesk exports. Phase 5 (eval gate) is blocked on this.
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Ready to plan
+Phase: 4 (reopened)
+Plan: Not started (replan pending rule derivation)
+Status: Reopened — deriving authorized-offer rule set from 3 categorized ticket samples (change-request/complaint/inquiry)
 Last activity: 2026-06-03
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 43% (Phase 4 reopened)
 
 ## Performance Metrics
 
@@ -143,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T09:09:53.559Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-offline-evaluation-harness-the-gate/05-CONTEXT.md
+Last session: 2026-06-03T09:33:51.144Z
+Stopped at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
+Resume file: .planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards/.continue-here.md
