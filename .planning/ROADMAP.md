@@ -90,7 +90,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-02-PLAN.md — Agent team: cs-lead (entry) + classifier/extractor (Haiku, REP-01/02) + drafter/critic (Sonnet, REP-03/04, drafter emits via submit_reply only) + 5 skills incl. reply-pipeline workflow (D-01/D-10/D-12); no Opus; body delimited as untrusted (Wave 3)
 - [x] 04-03-PLAN.md — Local PoC runner (DRY_RUN, via claude CLI + settings.json hooks) + INTEGRATED mock-LLM e2e proving high-risk/injection/un-cited drafts reach submit_reply and are blocked→escalate through the real bound chain + settings-hook-binding structural assertion (design §7/§4a) + blocking human-verify (package legitimacy + auth/env) (Wave 4)
 - [x] 04-04-PLAN.md — Gap closure (CR-01/CR-03/CR-04-hook/CR-05): fix PreToolUse exit codes 1→2 in pre_send_guard + grounding_check so they actually BLOCK submit_reply; close grounding_check empty-citation bypass (≥1 citation per D-11); injection_screen._extract_body fail-closed on missing body; pii_redact error path stops corrupting payload + documents D-04 PostToolUse limitation (Wave 5)
-- [ ] 04-05-PLAN.md — Gap closure (CR-02/CR-04-deploy/test-gap): stateful final-risk veto via per-run CS_RUN_ID state file (PostToolUse/SubagentStop write, PreToolUse@submit_reply read, fail-closed) restoring SAFE-03; mandatory non-bypassable runner injection pre-screen on the real path + subagent binding restoring SAFE-04; subprocess test suite asserting deployed exit-code contract (returncode==2/0) for every PreToolUse hook (Wave 6)
+- [x] 04-05-PLAN.md — Gap closure (CR-02/CR-04-deploy/test-gap): stateful final-risk veto via per-run CS_RUN_ID state file (PostToolUse/SubagentStop write, PreToolUse@submit_reply read, fail-closed) restoring SAFE-03; mandatory non-bypassable runner injection pre-screen on the real path + subagent binding restoring SAFE-04; subprocess test suite asserting deployed exit-code contract (returncode==2/0) for every PreToolUse hook (Wave 6)
 **UI hint**: no
 
 ### Phase 5: Offline Evaluation Harness (THE GATE)
@@ -137,7 +137,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 5/6 | In Progress|  |
+| 4. Reply Pipeline + Safety Guards | 6/6 | Complete   | 2026-06-03 |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Not started | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
