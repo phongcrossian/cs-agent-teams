@@ -84,11 +84,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The orchestrator produces a draft grounded in retrieved order data + KB content with citations, making no ungrounded claims, and runs a self-critique pass scoring it against the quality rubric before any send
   3. High-risk tickets (money/refund, legal/complaints, complex/ambiguous) are auto-routed to a human — any high-risk signal escalates the whole ticket — rather than auto-answered
   4. An output guard blocks commitment language about refunds/credits/charges/order changes regardless of category, and email body content is treated as data (delimited, injection-screened) not instructions
-**Plans**: 4 plans (4 waves; vertical MVP slices over a Wave-0 bootstrap; deterministic safety guards built before the orchestrator that composes them)
-- [ ] 04-00-PLAN.md — Wave 0 bootstrap: deps (pydantic-ai/anthropic/langfuse/otel, [ASSUMED] legitimacy human-verify) + Settings (Haiku/Sonnet models + Langfuse, secret redaction) + pipeline schemas/errors/LLM-client-seam/tracing + RED test stubs (Wave 0)
-- [ ] 04-01-PLAN.md — Deterministic safety guards (no LLM): injection screen + delimiting + commitment-language output guard (SAFE-04/D-13/D-14) + money/legal/conflict/stale escalation checks (SAFE-03/D-08/D-09) (Wave 1)
-- [ ] 04-02-PLAN.md — Orchestrator vertical slice: classify+extract (Haiku, REP-01/02) + ground(MCP)+draft+critique (Sonnet, REP-03/04) + staged run_pipeline with any-signal early-exit escalation + redraft-once (D-01/D-10/D-12) (Wave 2)
-- [ ] 04-03-PLAN.md — Wire run_pipeline into the Phase-2 worker DRY_RUN seam (D-02): verdict routing (draft→dry_run_log / escalate→no send, D-10) + LLM error taxonomy + end-to-end DRY_RUN smoke + human-verify (Wave 3)
+**Plans**: 4 plans (4 waves; RE-PLANNED for the Claude Code agent-team architecture — docs/specs/2026-06-02-cs-agent-team-design.md; superseded PydanticAI plans archived in _superseded/; vertical MVP slices over a Wave-0 bootstrap; deterministic safety hooks built before the agent team that composes them)
+- [ ] 04-00-PLAN.md — Wave 0 bootstrap: extend src/config.py (per-stage Haiku/Sonnet models + DRY_RUN, secret-redacted, env-driven for Bedrock) + .claude/settings.json (register both Phase-3 MCPs + bind 5 hooks) + .claude/CLAUDE.md team-safety contract (resolves root-CLAUDE collision) + sample-ticket fixtures + RED test stubs (Wave 1)
+- [ ] 04-01-PLAN.md — Five deterministic hooks (no LLM, mirror loop_guard (bool,reason)): injection_screen + pre_send_guard commitment block (SAFE-04/D-13/D-14) + escalation_gate any-signal-escalates (SAFE-03/D-08/D-09) + grounding_check (REP-03/D-11) + pii_redact (D-04); fail-closed (Wave 2)
+- [ ] 04-02-PLAN.md — Agent team: cs-lead (entry) + classifier/extractor (Haiku, REP-01/02) + drafter/critic (Sonnet, REP-03/04) + 5 skills incl. reply-pipeline workflow (D-01/D-10/D-12); no Opus; body delimited as untrusted (Wave 3)
+- [ ] 04-03-PLAN.md — Local PoC runner scripts/cs_team_demo.py feeds benign/high-risk/injection tickets to cs-lead in DRY_RUN + e2e acceptance test (design section 7) + blocking human-verify (package legitimacy + auth/env) (Wave 4)
 **UI hint**: no
 
 ### Phase 5: Offline Evaluation Harness (THE GATE)
