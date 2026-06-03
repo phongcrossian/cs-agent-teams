@@ -11,7 +11,9 @@ Contract (mirrors src/guards/loop_guard.should_suppress):
 
 Hook entry point: main() reads stdin JSON (Claude Code hook contract),
 calls screen_for_injection, exits 1 (block) on suspicion, 0 (pass) when clean.
-Fail-closed: malformed stdin → escalate.
+Fail-closed: malformed stdin → escalate. Also fail-closed when neither "prompt"
+nor "body" field is found in the payload — raises ValueError so the except branch
+escalates rather than silently passing an empty string (D-14 CR-04).
 """
 
 from __future__ import annotations
@@ -118,6 +120,10 @@ def _extract_body(payload: dict) -> str:
 
     Claude Code UserPromptSubmit payloads carry the user message in 'prompt'.
     Downstream callers may pass raw body in 'body'. Support both.
+
+    Fail-closed (CR-04 / D-14): if neither 'prompt' nor 'body' is present,
+    raises ValueError so the caller's except branch escalates instead of
+    silently passing an empty string through the injection screen.
     """
     # UserPromptSubmit schema: {"prompt": "...", ...}
     if "prompt" in payload:
@@ -125,7 +131,7 @@ def _extract_body(payload: dict) -> str:
     # Fallback: explicit body field
     if "body" in payload:
         return str(payload["body"])
-    return ""
+    raise ValueError("injection_screen:no_body_field")
 
 
 def main() -> None:

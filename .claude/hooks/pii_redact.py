@@ -13,6 +13,17 @@ Contract:
 Hook entry point: main() reads stdin JSON (Claude Code PostToolUse hook contract),
 redacts 'body' and 'draft' fields in the payload, prints redacted JSON,
 exits 0 — NEVER exits 1 (this hook does not block).
+
+Known limitation (D-04 / CR-05): This hook runs as a PostToolUse hook, meaning it
+fires *after* the tool has already executed and any logging/tracing that the tool
+itself performs may have already occurred. D-04's "before ANY log/trace" guarantee
+is therefore NOT fully met by this hook alone. The residual mitigations are:
+  1. submit_reply itself redacts at the persistence boundary (src/reply_mcp/server.py
+     _dry_run) before writing to any store.
+  2. Any downstream trace sink (Langfuse, OpenTelemetry) MUST apply Presidio redaction
+     at the sink before persisting spans.
+This PostToolUse hook is defense-in-depth for the payload flowing to Claude Code's
+own logging, not a substitute for point-of-write redaction.
 """
 
 from __future__ import annotations
@@ -38,9 +49,15 @@ def main() -> None:
     Reads stdin JSON, redacts 'body' and 'draft' fields (and any nested
     equivalents), prints the redacted payload as JSON, exits 0.
     This hook NEVER blocks — it transforms only.
+
+    Error path (CR-05): on any exception, pass the original payload through
+    unchanged rather than emitting {} (which would corrupt all fields and lose
+    downstream context). If stdin is unparseable, echo raw stdin back unchanged.
     """
+    raw_stdin: str = sys.stdin.read()
+    payload: dict | None = None
     try:
-        payload = json.load(sys.stdin)
+        payload = json.loads(raw_stdin)
 
         # Redact top-level body/draft fields
         if "body" in payload and isinstance(payload["body"], str):
@@ -66,13 +83,16 @@ def main() -> None:
         sys.exit(0)
 
     except Exception:  # noqa: BLE001 — pii_redact never blocks; pass through on error
-        # On any error, print original payload unmodified (still don't block)
-        # This is a transform hook — fail-open is acceptable here (we log, not gate)
+        # On any error, pass the original payload through unchanged (no field corruption).
+        # If we already parsed the payload before the error, re-serialize it.
+        # If stdin was never parseable, echo the raw stdin string back unchanged.
         try:
-            # Re-read stdin is not possible; emit empty pass-through
-            print("{}")
+            if payload is not None:
+                print(json.dumps(payload))
+            else:
+                print(raw_stdin)
         except Exception:  # noqa: BLE001
-            pass
+            print(raw_stdin)
         sys.exit(0)
 
 
