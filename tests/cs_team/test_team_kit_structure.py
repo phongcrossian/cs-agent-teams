@@ -81,7 +81,6 @@ _HOOK_FILES = [
 ]
 
 
-@pytest.mark.xfail(reason="Hook .py files not yet created — Wave 2", strict=True)
 @pytest.mark.parametrize("rel_path", _HOOK_FILES)
 def test_hook_file_exists(rel_path: str) -> None:
     """Each hook script must exist under .claude/hooks/."""
