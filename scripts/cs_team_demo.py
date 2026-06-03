@@ -16,6 +16,24 @@ Security / DRY_RUN:
   - All ticket bodies and draft bodies are passed through redact_text() before any
     print/log output (D-04 / CLAUDE.md D-04 / T-04-03-01).
 
+D-14 enforcement (injection pre-screen):
+  - The ticket body is ALWAYS injection-screened via _pre_screen_ticket() at the very
+    start of run_ticket(), BEFORE any CLI invocation or simulation branch.
+  - This is the mandatory, non-bypassable D-14 entry gate for the runner.
+  - On injection detection, run_ticket() returns an escalate verdict immediately
+    and the `claude` CLI is NEVER invoked (no subagent sees the body).
+  - Settings note: Claude Code does not expose a dedicated SubagentStart event in
+    the installed version; the mandatory runner pre-screen above is therefore the
+    enforced D-14 path on the deployed runner. The UserPromptSubmit binding in
+    settings.json provides the gate for interactive/REPL sessions.
+
+CS_RUN_ID lifecycle:
+  - run_ticket() generates a unique CS_RUN_ID per invocation and exports it to
+    os.environ before calling the CLI, so that settings.json-bound hook subprocesses
+    inherit it via the "CS_RUN_ID": "${CS_RUN_ID}" env forwarding line.
+  - A finally block deletes the per-run state file (best-effort) to honour the
+    ephemeral lifecycle defined in escalation_gate.py.
+
 Usage:
     uv run python scripts/cs_team_demo.py [--ticket {benign|high_risk|injection|all}]
 
@@ -33,9 +51,12 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -192,14 +213,19 @@ def _build_prompt(ticket: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Pre-screen helper (mirrors the UserPromptSubmit hook for the local runner)
+# Pre-screen helper — D-14 mandatory entry gate
 # ---------------------------------------------------------------------------
 
 
 def _pre_screen_ticket(ticket: dict) -> tuple[bool, str]:
     """Run injection_screen on the raw ticket body BEFORE sending to cs-lead.
 
-    Mirrors the UserPromptSubmit hook — the runner applies it as a pre-screen.
+    This is the MANDATORY, NON-BYPASSABLE D-14 entry gate for the runner.
+    It runs unconditionally at the very start of run_ticket(), before any
+    branch (CLI path or simulation path). On a positive detection the caller
+    returns an escalate verdict immediately — the CLI is never invoked and
+    no subagent ever sees the body.
+
     Returns (is_injection: bool, reason: str).
     """
     body = ticket.get("body", "")
@@ -223,6 +249,11 @@ def _post_screen_draft(draft_body: str, citations: list[dict]) -> tuple[bool, st
     return False, ""
 
 
+def _state_file_path(run_id: str) -> Path:
+    """Return the per-run state file path for *run_id* (mirrors escalation_gate.py)."""
+    return Path(tempfile.gettempdir()) / "cs_run_state" / f"{run_id}.json"
+
+
 # ---------------------------------------------------------------------------
 # Core: run a single ticket through cs-lead
 # ---------------------------------------------------------------------------
@@ -243,6 +274,10 @@ async def run_ticket(ticket: dict, *, use_live_claude: bool = False) -> dict[str
     Security:
         - DRY_RUN asserted True; no Freshdesk send path called.
         - PII redacted before any print/log.
+        - Injection pre-screen runs unconditionally before any CLI or simulation
+          branch (D-14 mandatory non-bypassable gate).
+        - CS_RUN_ID exported so settings.json-bound hook subprocesses share state
+          with the stateful escalation_gate veto (CR-02 / SAFE-03).
     """
     # Safety assertion: DRY_RUN must always be True in this phase
     assert settings.dry_run, (
@@ -252,7 +287,9 @@ async def run_ticket(ticket: dict, *, use_live_claude: bool = False) -> dict[str
     ticket_id = ticket.get("ticket_id", "unknown")
     redacted_subject = redact_text(ticket.get("subject", ""))
 
-    # Step 1: Pre-screen for injection (mirrors UserPromptSubmit hook)
+    # D-14 MANDATORY PRE-SCREEN — runs unconditionally before any branch.
+    # This is the enforced non-bypassable entry gate: if injection is detected,
+    # we return escalate immediately and the CLI is never invoked.
     is_injection, injection_reason = _pre_screen_ticket(ticket)
     if is_injection:
         logger.info(
@@ -266,12 +303,30 @@ async def run_ticket(ticket: dict, *, use_live_claude: bool = False) -> dict[str
             "signals": {"injection": True},
         }
 
-    if use_live_claude:
-        # Live path: shell out to `claude` CLI (requires human checkpoint approval + auth)
-        return await _run_via_claude_cli(ticket, redacted_subject)
-    else:
-        # Simulation path: apply hook logic locally (CI / DRY_RUN; no real LLM)
-        return _simulate_verdict(ticket)
+    # Generate a unique CS_RUN_ID for this ticket run and export it so that
+    # settings.json-bound escalation_gate hook subprocesses share the same
+    # per-run state file (CR-02 / SAFE-03).
+    run_id = f"{ticket_id}-{uuid.uuid4().hex[:8]}"
+    os.environ["CS_RUN_ID"] = run_id
+    state_file = _state_file_path(run_id)
+
+    try:
+        if use_live_claude:
+            # Live path: shell out to `claude` CLI (requires human checkpoint approval + auth)
+            return await _run_via_claude_cli(ticket, redacted_subject)
+        else:
+            # Simulation path: apply hook logic locally (CI / DRY_RUN; no real LLM)
+            return _simulate_verdict(ticket)
+    finally:
+        # Best-effort cleanup: remove the per-run state file to honour the
+        # ephemeral lifecycle defined in escalation_gate.py state-file design.
+        try:
+            if state_file.exists():
+                state_file.unlink()
+        except OSError:
+            pass
+        # Remove CS_RUN_ID from env so it does not leak into the next call
+        os.environ.pop("CS_RUN_ID", None)
 
 
 async def _run_via_claude_cli(ticket: dict, redacted_subject: str) -> dict[str, Any]:
@@ -464,10 +519,6 @@ async def main(argv: list[str] | None = None) -> int:
         redacted_subject = redact_text(ticket.get("subject", ""))
 
         verdict = await run_ticket(ticket, use_live_claude=args.live)
-
-        # PII check: ensure no raw email addresses in verdict body
-        raw_body_for_check = verdict.get("body", "") or verdict.get("reason", "")
-        # (redact_text is called on any string before printing)
 
         if key == "benign":
             ok, msg = _assert_benign(verdict)
