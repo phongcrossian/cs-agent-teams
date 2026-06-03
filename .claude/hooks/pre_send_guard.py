@@ -13,9 +13,9 @@ Contract (mirrors src/guards/loop_guard.should_suppress):
     - str: reason label (e.g. "commitment:refund"); "" when clean
 
 Hook entry point: main() reads stdin JSON (Claude Code PreToolUse hook contract
-for submit_reply), calls check_commitment_language, exits 1 (block) on match,
-0 (pass) when clean.
-Fail-closed: malformed stdin → escalate.
+for submit_reply), calls check_commitment_language, exits 2 (BLOCK/escalate)
+on match, 0 (pass) when clean.
+Fail-closed: malformed stdin → exits 2 (BLOCK/escalate).
 """
 
 from __future__ import annotations
@@ -97,11 +97,11 @@ def main() -> None:
         blocked, reason = check_commitment_language(draft)
         if blocked:
             print(json.dumps({"action": "escalate", "reason": reason}))
-            sys.exit(1)
+            sys.exit(2)
         sys.exit(0)
     except Exception as exc:  # noqa: BLE001 — fail-closed
         print(json.dumps({"action": "escalate", "reason": f"pre_send_guard:error:{exc}"}))
-        sys.exit(1)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

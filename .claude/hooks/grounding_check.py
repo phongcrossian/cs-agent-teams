@@ -14,8 +14,8 @@ Contract (mirrors src/guards/loop_guard.should_suppress):
     - str: "" when grounded; failure reason when not (e.g. "grounding:no_citations_in_draft")
 
 Hook entry point: main() reads stdin JSON {"draft": "...", "citations": [...]},
-calls check_grounding, exits 1 (block/escalate) on failure, 0 (pass) on success.
-Fail-closed: malformed stdin → escalate (exit 1).
+calls check_grounding, exits 2 (BLOCK/escalate) on failure, 0 (pass) on success.
+Fail-closed: malformed stdin → escalate (exit 2 = BLOCK).
 """
 
 from __future__ import annotations
@@ -34,20 +34,27 @@ _CITATION_MARKER = re.compile(r"\[(?:KB|SEL)-\d+\]")
 def check_grounding(draft: str, citations: list[dict]) -> tuple[bool, str]:
     """Return (grounded: bool, reason: str).
 
-    grounded=True means PASS (all markers map to known citations, or no citations
-    exist and draft has no markers — e.g. empty citations list).
+    grounded=True means PASS (all markers map to known citations).
     grounded=False means FAIL with a reason label.
 
     Rules:
     1. If citations exist but draft has NO citation markers → fail.
     2. If draft markers reference unknown citation IDs → fail.
-    3. If all markers map to known IDs (or no markers AND no citations) → pass.
+    3. If draft body is non-empty AND has NO citation markers AND has NO citations → fail.
+       A factual draft requires ≥1 citation per D-11; empty-citation + empty-marker is
+       ungrounded by default (closes the empty-citation bypass, CR-03).
     """
     markers_in_draft: set[str] = set(_CITATION_MARKER.findall(draft))
 
     # Rule 1: citations provided but none cited in draft
     if citations and not markers_in_draft:
         return False, "grounding:no_citations_in_draft"
+
+    # Rule 3 (CR-03): non-empty body with zero markers AND zero citations → ungrounded.
+    # D-11 requires ≥1 citation for any factual claim; a draft with no citations at all
+    # cannot be verified as grounded.
+    if draft and not markers_in_draft and not citations:
+        return False, "grounding:no_citations"
 
     # Rule 2: markers reference unknown citations
     # Normalize citation IDs: accept both "KB-1" and "[KB-1]" as equivalent.
@@ -104,11 +111,11 @@ def main() -> None:
         grounded, reason = check_grounding(draft, citations)
         if not grounded:
             print(json.dumps({"action": "escalate", "reason": reason}))
-            sys.exit(1)
+            sys.exit(2)
         sys.exit(0)
     except Exception as exc:  # noqa: BLE001 — fail-closed
         print(json.dumps({"action": "escalate", "reason": f"grounding_check:error:{exc}"}))
-        sys.exit(1)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

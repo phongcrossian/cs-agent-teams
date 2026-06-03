@@ -255,10 +255,22 @@ def test_sel_citation_marker_accepted() -> None:
     assert grounded is True, f"SEL citation should be accepted, got: {reason!r}"
 
 
-def test_empty_citations_empty_draft_passes() -> None:
-    """No citations + no markers = pass (nothing to violate)."""
+def test_empty_citations_nonempty_draft_fails() -> None:
+    """Non-empty body with no citation markers AND no citations = FAIL (CR-03 / D-11).
+
+    A factual draft requires ≥1 citation per D-11; zero-citation + zero-marker is
+    ungrounded by default. This closes the empty-citation bypass (CR-03).
+    """
     check_grounding = _grounding()
     grounded, reason = check_grounding("Thank you for contacting us.", [])
+    assert grounded is False
+    assert reason == "grounding:no_citations"
+
+
+def test_truly_empty_draft_passes() -> None:
+    """Empty draft string with no citations = pass (no claims to ground, nothing to violate)."""
+    check_grounding = _grounding()
+    grounded, reason = check_grounding("", [])
     assert grounded is True
     assert reason == ""
 
