@@ -94,7 +94,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-06-PLAN.md — REOPEN: deterministic authorized_offer module (.claude/hooks/authorized_offer.py) — §0 authorized/unauthorized test + per-sub-type template registry + THR-05/06/07/08 caps + RD-Q2 eligibility STUB; exhaustive RULES §2 unit tests (SAFE-04, Wave 7)
 - [x] 04-07-PLAN.md — REOPEN: classifier emits level-2 customer_request sub-type (13-value RULES §2 enum), Haiku preserved, additive verdict schema; classify-ticket skill + contract test (REP-01, Wave 7)
 - [x] 04-08-PLAN.md — REOPEN: escalation_gate.py + operational_action trigger (Review/Full_Refund/asserting-change_request per RD-Q1) keeping all existing triggers; subprocess exit-2 proofs (SAFE-03/REP-01, Wave 8)
-- [ ] 04-09-PLAN.md — REOPEN (load-bearing): pre_send_guard.py replaces block-all with the D-26 authorized-offer test via authorize_offer; exit-0 for in-policy templated offers / exit-2 for every unauthorized axis; never auto-strip, fail-closed; subprocess contract suite (SAFE-04, Wave 8)
+- [x] 04-09-PLAN.md — REOPEN (load-bearing): pre_send_guard.py replaces block-all with the D-26 authorized-offer test via authorize_offer; exit-0 for in-policy templated offers / exit-2 for every unauthorized axis; never auto-strip, fail-closed; subprocess contract suite (SAFE-04, Wave 8)
 - [ ] 04-10-PLAN.md — REOPEN: drafter template-select by sub-type + eligibility grounding (RD-Q2 stub) + structured offer block to submit_reply + RD-Q1 never-assert-operational-action; ground-and-draft skill + contract test (REP-03/SAFE-04, Wave 9)
 - [ ] 04-11-PLAN.md — REOPEN (DEFERRED, autonomous:false): wire REAL Selless eligibility (warranty THR-03/04 window, prior-remediation, variant stock) + RD-Q3 evidence validation at the STUB swap points; fail-closed degradation when a real field is absent (SAFE-04, Wave 10)
 **UI hint**: no
@@ -143,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 9/12 | In Progress|  |
+| 4. Reply Pipeline + Safety Guards | 10/12 | In Progress|  |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |

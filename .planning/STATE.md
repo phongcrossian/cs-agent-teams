@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
-last_updated: "2026-06-03T10:59:10.881Z"
+last_updated: "2026-06-03T11:06:19.648Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-06-03
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [█████████░] 89%
 | Phase 04 P07 | 8 | 2 tasks | 3 files |
 | Phase 04 P06 | 8 | 2 tasks | 3 files |
 | Phase 04 P08 | 10 | 2 tasks | 2 files |
+| Phase 04 P09 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,7 @@ Recent decisions affecting current work:
 - [03-04]: Live HttpSellessClient + Voyage path sandbox-gated and never runs in CI; Phase-3 live verification is human-attested (user approved RUN_SANDBOX=1 sandbox smoke)
 - [03-04]: PydanticDeprecatedSince211 in audit.py:69 (model_fields on instance) is harmless — tidy to class access in a later plan
 - [Phase ?]: operational_action placed after five base signals in _SIGNAL_ORDER (additive per D-08)
+- [Phase ?]: D-26 supersedes D-13: pre_send_guard block-all replaced by authorize_offer §0 test; commitment lexicon demoted to tripwire
 
 ### Pending Todos
 
@@ -147,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T10:59:04.253Z
+Last session: 2026-06-03T11:06:09.331Z
 Stopped at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
 Resume file: None
