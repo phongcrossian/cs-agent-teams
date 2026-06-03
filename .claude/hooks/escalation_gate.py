@@ -69,7 +69,21 @@ _SIGNAL_ORDER: list[tuple[str, str]] = [
     ("conflict",            "escalate:kb_conflict"),
     ("stale_only",          "escalate:stale_only"),
     ("missing_key",         "escalate:missing_key"),
+    # operational_action: Review (no flow yet), Full_Refund (evidence-gated escalation path),
+    # or any change_request sub-type whose draft would assert a completed mutation (RD-Q1).
+    # Placed AFTER the five base signals so existing reasons take precedence on first-match;
+    # additive per D-08 — does not remove or weaken any prior signal.
+    ("operational_action",  "escalate:operational_action"),
 ]
+
+# change_request sub-types that require mutation execution before drafting (§1 boundary).
+# A draft claiming "we've canceled/updated…" without the mutation is UNAUTHORIZED (RD-Q1).
+_MUTATION_ASSERTING_SUBTYPES: frozenset[str] = frozenset({
+    "Change_Shipping_Address",
+    "Change_Product_Variant",
+    "Change_Non_Shipping_Address",
+    "Express_Line",
+})
 
 _ALL_SIGNAL_KEYS: list[str] = [k for k, _ in _SIGNAL_ORDER]
 
@@ -118,7 +132,68 @@ def _derive_signals(payload: dict) -> dict:
     # Final fallback: scan top-level for known signal keys
     known_keys = {k for k, _ in _SIGNAL_ORDER}
     signals = {k: bool(payload.get(k, False)) for k in known_keys if k in payload}
+
+    # Derive operational_action from stage-result fields not represented by bool signals.
+    # Sources checked at top-level and under tool_result/result/output (same nesting logic above).
+    _derive_operational_action(payload, signals)
+
     return signals
+
+
+def _derive_operational_action(payload: dict, signals: dict) -> None:
+    """Set signals['operational_action'] = True when the payload indicates an operational action.
+
+    Mutates *signals* in place. Rules (D-08 additive — existing True is never cleared):
+
+    1. customer_request ∈ {"Review", "Full_Refund"}:
+       - Review: no dedicated template/flow yet (§2A, Q2) → always escalate.
+       - Full_Refund: evidence-gated; escalate so human verifies flow/evidence (§2A, Q4 stricter checks).
+
+    2. asserts_mutation is truthy (any stage explicitly flags a completed-action claim):
+       → escalate (RD-Q1 — draft claims an action the AI did not cause).
+
+    3. customer_request ∈ _MUTATION_ASSERTING_SUBTYPES AND asserts_mutation is not explicitly False:
+       → escalate (§1 execution boundary — §2B AUTO* after mutation per §1, else ESCALATE).
+       Rationale: if the upstream stage does not explicitly set asserts_mutation=False, the safe
+       default is to treat the draft as potentially asserting a completed mutation (fail-closed).
+    """
+    # If the signal is already True (from an explicit signals dict), keep it.
+    if signals.get("operational_action"):
+        return
+
+    # Extract relevant fields from all nesting levels.
+    customer_request: str | None = None
+    asserts_mutation: object = None  # use sentinel None = "not present"
+
+    for src in _iter_payload_sources(payload):
+        if customer_request is None:
+            customer_request = src.get("customer_request")
+        if asserts_mutation is None and "asserts_mutation" in src:
+            asserts_mutation = src["asserts_mutation"]
+
+    # Rule 1: Review or Full_Refund → escalate.
+    if customer_request in ("Review", "Full_Refund"):
+        signals["operational_action"] = True
+        return
+
+    # Rule 2: explicit asserts_mutation=True flag from any stage.
+    if asserts_mutation:
+        signals["operational_action"] = True
+        return
+
+    # Rule 3: mutation-asserting change_request sub-type AND asserts_mutation not False.
+    if customer_request in _MUTATION_ASSERTING_SUBTYPES and asserts_mutation is not False:
+        signals["operational_action"] = True
+        return
+
+
+def _iter_payload_sources(payload: dict):
+    """Yield the payload dict itself and any nested result containers, in precedence order."""
+    yield payload
+    for key in ("tool_result", "result", "output"):
+        nested = payload.get(key)
+        if isinstance(nested, dict):
+            yield nested
 
 
 # ---------------------------------------------------------------------------
