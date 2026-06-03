@@ -92,6 +92,70 @@ SAFE-03, SAFE-04**.
 
 </decisions>
 
+<reopen_decisions>
+## REOPEN (2026-06-03) — Authorized-Offer Guard (D-26/D-27, supersedes block-all D-13)
+
+> **Why reopened.** The original D-13/SAFE-04 made `pre_send_guard.py` block ALL refund/credit/replace/charge
+> language → escalate. A live Freshdesk fetch (312 real tickets) proved the *correct* CS flow resolves the
+> highest-volume categories (complaint / cancellation / shipping) with **policy-bounded templated offers**
+> (ticket 7732073's real reply == template **B7** verbatim). Block-all would escalate that entire volume and
+> fail every correct reply. **The 6 plans 04-00..04-05 stay executed/verified; this reopen ADDS new plans
+> (04-06+)** that make the guard template + threshold + eligibility aware.
+>
+> **Authoritative rule set:** `04-AUTHORIZED-OFFER-RULES.md` (THIS phase dir) — the data-derived case
+> taxonomy → template → authorized offer/threshold → draft-vs-escalate boundary. The planner MUST read it.
+> **Companion decisions:** `../05-offline-evaluation-harness-the-gate/05-CONTEXT.md` D-25..D-28.
+
+**D-26 (locked) — template/threshold/eligibility-aware guard (supersedes D-13).** A commitment in a draft is
+AUTHORIZED (allow) iff ALL hold: (1) it matches an **approved template** for the classified flow (A1–A9,
+B1–B13, C1, cancellation t1–9, change t1–5, shipping t1–5); (2) the offered value is **within the policy
+threshold** (POLICY-THRESHOLD-INDEX: THR-05 40% discount+free-ship, THR-06 ≤20% retention, THR-07 50% refund,
+THR-08 ≤50% late-ship comp); (3) the **order is eligible** (warranty THR-03/04 = 45d purchase / 14d delivery;
+not already at a higher remediation tier — "offered 50%/replacement before?"), grounded via Selless; (4) it
+follows the documented Flow + policy. Anything else (over-threshold / out-of-template / ineligible /
+second-remediation / fabricated) → block → escalate. **Threshold authority:** AI MAY commit up to
+THR-05/06/07/08 **without per-case human sign-off** when eligibility is grounded and policy is followed;
+out-of-policy → human.
+
+**D-27 (locked) — gate redefinition.** Phase-5 hard gate becomes **"0 UNAUTHORIZED commitments"** (offers
+failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold offers are CORRECT.
+
+### Reopen scope — components to rework (per RULES §3), planned as NEW plans on top of 04-00..04-05
+- **classifier** — emit the level-2 `Customer_Request` sub-type (Return / Replace / Partial_Refund /
+  Full_Refund / Review / Cancel_Order / Change_Shipping_Address / Change_Product_Variant /
+  Ask_About_Delivery_Status / Ask_About_Order / Ask_About_Policy / Ask_About_Product / Ask_About_Promotion),
+  not just the macro category, so the rule table is addressable.
+- **escalation_gate.py** — ADD an "operational-action" trigger (any `change_request` sub-type that would
+  assert a mutation, Full_Refund evidence-gated, Review) → escalate. KEEP all existing triggers.
+- **pre_send_guard.py** — REPLACE block-all-commitment with the D-26 authorized/unauthorized test; allow an
+  offer only if template + threshold + grounded eligibility all pass; block otherwise. Still deterministic,
+  fail-closed, exit-2-blocks-submit_reply; never auto-strip.
+- **drafter** — select the correct template via Knowledge MCP `get_template` for the classified sub-type;
+  ground eligibility via Selless before any offer; **never claim an operational action was executed.**
+
+### Reopen clarifications resolved by user (2026-06-03) — LOCKED for planning
+- **RD-Q1 — change_request execution boundary = model (a) draft-after-ops / escalate-on-assertion.**
+  Honors the Phase-1 constraint "answers customers only — never executes operational actions". The AI MUST
+  NOT claim an action it did not cause. A draft that asserts "we've canceled / updated / changed…" without
+  the mutation having occurred is UNAUTHORIZED → **escalate**. Only non-asserting phrasing may be drafted:
+  the ≤20% retention offer (THR-06) and acknowledgement / next-step language. NO AI-triggered Selless
+  mutation in Phase 4.
+- **RD-Q2 — eligibility surface = DEMO STUB now, real API later.** For the local PoC demo, treat the
+  eligibility/product surface as available: assume a product-info MCP check exists and assume **variant
+  stock is always in-stock**. Wire the real Selless eligibility fields (warranty dates, prior-remediation
+  state, real variant stock, scoped product-info API) in a **later/deferred plan**. Plans MUST mark these
+  as stubbed/assumed and keep the guard's structure so the real check drops in without reshaping it.
+- **RD-Q3 — evidence = accept-as-sufficient now, validate later.** For Full_Refund / evidence-gated paths,
+  treat submitted evidence as sufficient/eligible in this phase; build the real photo/shipping-label
+  **validation in a deferred plan**. (Pairs with D-26: still escalate if the case is out-of-policy on other
+  axes.)
+
+> **Source-of-truth precedence for planning:** `04-AUTHORIZED-OFFER-RULES.md` (rule table) + these RD-Qx
+> answers OVERRIDE the stale "block all … regardless of category" wording of D-13 above. ROADMAP success
+> criterion #4 has already been revised to match (2026-06-03).
+
+</reopen_decisions>
+
 <canonical_refs>
 ## Canonical References — downstream agents MUST read
 
