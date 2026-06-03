@@ -33,6 +33,12 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "respx==0.23.1",
 ]
+# Phase 4 — cs-agent-team dependencies (declared; install gated by human-verify in 04-03)
+# NOTE: anthropic package name verified on pypi.org/project/anthropic/
+# NOTE: claude-agent-sdk package name TBD — verify on pypi.org before installing in 04-03
+cs-team = [
+    "anthropic>=1.0.0",  # Anthropic Python SDK — prompt caching, Batch API (pypi: anthropic)
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
