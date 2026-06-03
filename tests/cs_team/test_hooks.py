@@ -27,8 +27,8 @@ def _injection():
 
 
 def _commitment():
-    from .claude.hooks.pre_send_guard import check_commitment_language  # type: ignore[import]
-    return check_commitment_language
+    from .claude.hooks.pre_send_guard import _has_commitment_term  # type: ignore[import]
+    return _has_commitment_term
 
 
 def _escalation():
@@ -87,57 +87,52 @@ def test_high_risk_ticket_body_passes_injection_screen() -> None:
 
 
 def test_draft_with_refund_escalates() -> None:
-    """Draft containing 'refund' triggers pre_send_guard → escalate (D-13)."""
-    check_commitment_language = _commitment()
+    """Draft containing 'refund' trips _has_commitment_term → guard escalates (D-26 tripwire)."""
+    has_commitment_term = _commitment()
     draft = "We will process your full refund within 3-5 business days."
-    blocked, reason = check_commitment_language(draft)
-    assert blocked is True, f"Draft with 'refund' must be blocked, got: {(blocked, reason)}"
-    assert reason == "commitment:refund", f"Expected commitment:refund, got: {reason!r}"
+    assert has_commitment_term(draft) is True, (
+        f"Draft with 'refund' must trip the commitment tripwire"
+    )
 
 
 def test_draft_with_credit_escalates() -> None:
-    """Draft containing 'credit' triggers pre_send_guard."""
-    check_commitment_language = _commitment()
-    blocked, reason = check_commitment_language("We'll apply a store credit to your account.")
-    assert blocked is True
-    assert reason == "commitment:credit"
+    """Draft containing 'store credit' trips _has_commitment_term."""
+    has_commitment_term = _commitment()
+    assert has_commitment_term("We'll apply a store credit to your account.") is True
 
 
 def test_draft_with_charge_escalates() -> None:
-    """Draft containing 'charge' triggers pre_send_guard."""
-    check_commitment_language = _commitment()
-    blocked, reason = check_commitment_language("We have reversed the charge on your card.")
-    assert blocked is True
-    assert reason == "commitment:charge"
+    """Draft containing 'charge' trips _has_commitment_term."""
+    has_commitment_term = _commitment()
+    assert has_commitment_term("We have reversed the charge on your card.") is True
 
 
 def test_draft_with_replace_escalates() -> None:
-    """Draft containing 'replace' triggers pre_send_guard."""
-    check_commitment_language = _commitment()
-    blocked, reason = check_commitment_language("We will replace the damaged item immediately.")
-    assert blocked is True
-    assert reason == "commitment:order_change"
+    """Draft containing 'replace' trips _has_commitment_term."""
+    has_commitment_term = _commitment()
+    assert has_commitment_term("We will replace the damaged item immediately.") is True
 
 
 def test_draft_with_high_risk_ticket_refund_phrase_escalates() -> None:
-    """HIGH_RISK_TICKET body contains 'refund' → a draft echoing it would be blocked."""
-    check_commitment_language = _commitment()
+    """HIGH_RISK_TICKET body contains 'refund' → a draft echoing it trips the tripwire."""
+    has_commitment_term = _commitment()
     # Simulate a naive draft that echoes the refund request
     naive_draft = "We acknowledge your request for a refund on order ORD-20240430-5512."
-    blocked, reason = check_commitment_language(naive_draft)
-    assert blocked is True, f"Draft echoing refund must be blocked, got: {(blocked, reason)}"
+    assert has_commitment_term(naive_draft) is True, (
+        "Draft echoing refund must trip the commitment tripwire"
+    )
 
 
 def test_clean_draft_passes_commitment_guard() -> None:
-    """Clean informational draft passes pre_send_guard."""
-    check_commitment_language = _commitment()
+    """Clean informational draft does not trip _has_commitment_term (no commitment terms)."""
+    has_commitment_term = _commitment()
     draft = (
         "Thank you for reaching out. Your order #ORD-20240501-7823 is currently "
         "being processed and should ship within 2 business days [KB-1]."
     )
-    blocked, reason = check_commitment_language(draft)
-    assert blocked is False, f"Clean draft should pass, got: (blocked={blocked}, reason={reason!r})"
-    assert reason == ""
+    assert has_commitment_term(draft) is False, (
+        "Clean informational draft must not trip the commitment tripwire"
+    )
 
 
 # ---------------------------------------------------------------------------

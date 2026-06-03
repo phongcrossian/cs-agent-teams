@@ -92,7 +92,7 @@ _pre_send_guard_mod = _load_hook("pre_send_guard")
 
 check_grounding = _grounding_check_mod.check_grounding
 screen_for_injection = _injection_screen_mod.screen_for_injection
-check_commitment_language = _pre_send_guard_mod.check_commitment_language
+_has_commitment_term = _pre_send_guard_mod._has_commitment_term
 
 from tests.fixtures.sample_tickets import (  # noqa: E402
     BENIGN_TICKET,
@@ -273,10 +273,9 @@ def _post_screen_draft(draft_body: str, citations: list[dict]) -> tuple[bool, st
     grounded, reason = check_grounding(draft_body, citations)
     if not grounded:
         return True, reason
-    # Commitment language guard (D-13)
-    blocked, reason = check_commitment_language(draft_body)
-    if blocked:
-        return True, reason
+    # Commitment language tripwire (D-26) — bare commitment term with no offer block → escalate
+    if _has_commitment_term(draft_body):
+        return True, "unauthorized:commitment_without_offer"
     return False, ""
 
 
@@ -520,9 +519,8 @@ def _assert_benign(verdict: dict) -> tuple[bool, str]:
     if not citations:
         return False, "expected >=1 citation; got none"
     body = verdict.get("body", "")
-    blocked, reason = check_commitment_language(body)
-    if blocked:
-        return False, f"commitment language found in draft: {reason}"
+    if _has_commitment_term(body):
+        return False, "commitment language found in draft (D-26 tripwire)"
     return True, ""
 
 

@@ -18,7 +18,7 @@ Three layers:
         - BENIGN cited mock draft → chain PASSES → submit_reply returns {"submitted": True}
       Asserts: action=escalate, no raw PII in output, DRY_RUN throughout.
       The mock exercises the REAL hook check functions (grounding_check.check_grounding,
-      pre_send_guard.check_commitment_language, injection_screen.screen_for_injection,
+      pre_send_guard._has_commitment_term, injection_screen.screen_for_injection,
       escalation_gate.should_escalate) — NOT standalone unit tests (those live in 04-01).
 
   (c) LIVE — gated behind RUN_CS_TEAM=1.
@@ -79,7 +79,7 @@ _inj_mod = _load_hook("injection_screen")
 _esc_mod = _load_hook("escalation_gate")
 
 check_grounding = _gc_mod.check_grounding
-check_commitment_language = _psg_mod.check_commitment_language
+_has_commitment_term = _psg_mod._has_commitment_term
 screen_for_injection = _inj_mod.screen_for_injection
 should_escalate = _esc_mod.should_escalate
 
@@ -239,10 +239,11 @@ def _run_pre_tool_use_chain(
     if not grounded:
         return {"action": "escalate", "reason": reason, "signals": risk_signals}
 
-    # Hook 2: pre_send_guard (D-13 — commitment language)
-    blocked, reason = check_commitment_language(body)
-    if blocked:
-        return {"action": "escalate", "reason": reason, "signals": risk_signals}
+    # Hook 2: pre_send_guard (D-26 — commitment-language tripwire)
+    # _has_commitment_term returns True if any commitment term is present with no authorized offer.
+    # In the integrated mock chain there is no offer block, so a bare commitment term → escalate.
+    if _has_commitment_term(body):
+        return {"action": "escalate", "reason": "unauthorized:commitment_without_offer", "signals": risk_signals}
 
     # Hook 3: escalation_gate @ submit_reply (D-08 — accumulated risk veto)
     escalated, reason = should_escalate(risk_signals)
@@ -436,9 +437,10 @@ class TestIntegratedMockLLM:
         verdict = _run_pre_tool_use_chain(mock_draft_body, mock_citations)
 
         assert verdict["action"] == "draft"
-        # Double-check: no commitment language in the draft that passed
-        blocked, reason = check_commitment_language(verdict.get("body", ""))
-        assert not blocked, f"Passing draft contains commitment language: {reason}"
+        # Double-check: no commitment language in the draft that passed (D-26 tripwire)
+        assert not _has_commitment_term(verdict.get("body", "")), (
+            "Passing draft contains commitment language (tripwire _has_commitment_term returned True)"
+        )
 
     # ── PII: no raw fixture PII in verdict output ─────────────────────────────
 
@@ -551,8 +553,9 @@ class TestLiveCSTeam:
         verdict = await run_ticket(BENIGN_TICKET, use_live_claude=True)
         assert verdict["action"] == "draft", f"Expected draft; got {verdict!r}"
         assert verdict.get("citations"), "Benign draft must include citations"
-        blocked, reason = check_commitment_language(verdict.get("body", ""))
-        assert not blocked, f"Draft contains commitment language: {reason}"
+        assert not _has_commitment_term(verdict.get("body", "")), (
+            "Draft contains commitment language (D-26 tripwire _has_commitment_term returned True)"
+        )
 
     @pytest.mark.asyncio
     async def test_high_risk_ticket_escalates(self) -> None:

@@ -50,29 +50,26 @@ def test_screen_for_injection_benign() -> None:
 
 
 # ---------------------------------------------------------------------------
-# check_commitment_language — pre_send_guard.py
+# _has_commitment_term — pre_send_guard.py (D-26 tripwire; D-13 block-all guard superseded by plan 04-09)
 # ---------------------------------------------------------------------------
 
 
-def test_check_commitment_language_contract() -> None:
-    """check_commitment_language(draft: str) -> tuple[bool, str] exists with correct contract."""
-    from .claude.hooks.pre_send_guard import check_commitment_language  # type: ignore[import]
+def test_has_commitment_term_contract() -> None:
+    """_has_commitment_term(body: str) -> bool exists; returns True on commitment language (D-26 tripwire)."""
+    from .claude.hooks.pre_send_guard import _has_commitment_term  # type: ignore[import]
 
-    result = check_commitment_language("We will process your refund immediately.")
-    assert isinstance(result, tuple) and len(result) == 2
-    blocked, reason = result
-    assert isinstance(blocked, bool)
-    assert isinstance(reason, str)
-    assert blocked is True, f"Expected commitment language to be detected, got: {result}"
+    result = _has_commitment_term("We will process your refund immediately.")
+    assert isinstance(result, bool), f"Expected bool, got: {type(result)}"
+    assert result is True, f"Expected commitment term to be detected, got: {result}"
 
 
-def test_check_commitment_language_clean() -> None:
-    """check_commitment_language passes draft without commitment language."""
-    from .claude.hooks.pre_send_guard import check_commitment_language  # type: ignore[import]
+def test_has_commitment_term_clean() -> None:
+    """_has_commitment_term returns False on informational body with no commitment terms."""
+    from .claude.hooks.pre_send_guard import _has_commitment_term  # type: ignore[import]
 
-    blocked, reason = check_commitment_language("Thank you for contacting us. We have looked into your order.")
-    assert blocked is False
-    assert reason == ""
+    result = _has_commitment_term("Thank you for contacting us. We have looked into your order.")
+    assert isinstance(result, bool), f"Expected bool, got: {type(result)}"
+    assert result is False, f"Clean body must not trip the tripwire, got: {result}"
 
 
 # ---------------------------------------------------------------------------
