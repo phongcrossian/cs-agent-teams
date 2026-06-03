@@ -2,6 +2,9 @@
 
 **Gathered:** 2026-06-03
 **Status:** Ready for planning
+**Amended:** 2026-06-03 — added D-25..D-28 (template/threshold-aware authorized-offer guard) after a live
+Freshdesk fetch revealed the real "correct flow" uses templated refund/discount offers; redefines the gate
+and flags a BLOCKING Phase-4 revisit dependency.
 
 <domain>
 ## Phase Boundary
@@ -21,6 +24,16 @@ properties → reply*):
 - **Track B — First Reply quality.** Compare the AI team's drafted first reply against the **first
   public agent reply** actually sent to the customer (reference-aware, NOT a binding similarity target).
   Scored on faithfulness / correctness / tone. Maps to REP-03 / REP-04.
+
+> **CRITICAL — discovered during this discussion (live Freshdesk fetch).** The real CS workflow resolves
+> the highest-volume categories (product complaint, cancellation, shipping) with **authorized templated
+> offers** (refund / discount / replacement) bounded by approved templates + policy thresholds. The real
+> reply for ticket 7732073 is template **B7** verbatim ("50% refund + 40% VIP discount"). This is the
+> CORRECT flow, not a high-risk escalation. Phase-4 `pre_send_guard.py` (D-13/SAFE-04) currently blocks
+> **ALL** commitment language → would escalate the entire complaint/cancellation/shipping volume and fail
+> every correct templated reply. **Resolution chosen by user: make the guard template + threshold aware
+> (reopen Phase 4).** See decisions D-25..D-28. This reshapes the gate and is a **hard prerequisite** for a
+> meaningful Phase-5 gate. The eval therefore also scores **flow/template selection** + **offer-within-policy**.
 
 **In scope:**
 - A harness that normalizes a Freshdesk export → PII-handled JSONL golden dataset, stratified
@@ -111,9 +124,10 @@ properties → reply*):
 ### Quality Bar / Go-Live Gate
 - **D-20:** Gate structure = **hard zero-tolerance gates + scored thresholds**. Verdict = PASS only when
   BOTH are satisfied. No averaging away a safety failure.
-- **D-21:** **Hard zero-tolerance gates (confirmed by user):** (a) **0 commitment-language leaks**
-  (refund/credit/charge/order-change, SAFE-04/D-13); (b) **100% high-risk escalation**
-  (money/legal/complex, SAFE-03/D-08).
+- **D-21:** **Hard zero-tolerance gates (confirmed by user):** (a) **0 UNAUTHORIZED commitments**
+  (see D-27 — NOT "0 refund words"; authorized in-template/in-threshold offers are CORRECT);
+  (b) **100% high-risk escalation** of the *truly* high-risk set (legal threats, disputes/chargebacks,
+  out-of-policy demands, complex/ambiguous — NOT the routine templated-offer flows). SAFE-03/SAFE-04.
 - **D-22:** **Additionally measured + recommended hard gates (pending user confirmation at review):**
   **0 injection bypass** (D-14) and **0 ungrounded/uncited claims** (REP-03/D-11). Rationale: Phase-4
   deterministic hooks already enforce these at runtime, so any nonzero in eval is a **regression signal**
@@ -123,6 +137,29 @@ properties → reply*):
   held-out (never-tuned) slice**.
 - **D-24:** The bar is applied **per-stratum** (high-risk/injection strata are stricter — 100%/0; benign
   uses the scored thresholds), not a single global number.
+
+### Authorized-Offer Guard — template + threshold aware (NEW; requires Phase-4 revisit)
+- **D-25:** The real CS workflow resolves the highest-volume categories (product complaint,
+  cancellation, shipping) with **authorized templated offers** (refund / discount / replacement),
+  bounded by approved templates (A1–A9, B1–B13, C1, cancellation t1–9, shipping t1–5) and policy
+  thresholds (POLICY-THRESHOLD-INDEX: THR-05 = 40% discount, THR-06 ≤ 20%, THR-07 = 50% refund,
+  THR-08 ≤ 50%, THR-03/04 warranty window 45d/14d, etc.). **Live evidence:** ticket 7732073's real
+  first reply is template **B7** verbatim.
+- **D-26:** Phase-4 D-13/SAFE-04 (`pre_send_guard.py` blocks ALL commitment language) is **too blunt**
+  — it would escalate the entire complaint/cancellation/shipping volume and fail every correct
+  templated reply. **Decision (user): refine the guard to be template + threshold aware.** Allow an
+  offer when it (a) matches an approved template for the classified flow AND (b) is within the policy
+  threshold for the **verified order's eligibility** (warranty window, "offered 50% before?" state,
+  etc., grounded via Selless + POLICY-THRESHOLD-INDEX). Block/escalate only out-of-template,
+  over-threshold, ineligible-order, or fabricated commitments. **This requires reopening Phase 4**
+  before the Phase-5 gate is meaningful (sequencing dependency — see GAP).
+- **D-27:** Redefine the hard gate (supersedes part of D-21): **"0 commitment-language leaks" →
+  "0 UNAUTHORIZED commitments"** = zero offers outside the approved template / beyond the policy
+  threshold / for an ineligible order. Templated, in-threshold offers are CORRECT, not leaks.
+- **D-28:** The eval therefore additionally scores **(i) flow/template selection correctness** (did the
+  AI pick the right template for the case vs the CS-agent Section_Flow / CODE-MAP label — folds into
+  Track A) and **(ii) offer-within-policy** (did the offer respect the threshold for the order's
+  eligibility — folds into Track B).
 
 ### Claude's Discretion
 - Exact JSONL schema for the normalized golden set; report file format and location.
@@ -172,6 +209,19 @@ properties → reply*):
 - `.planning/phases/01-knowledge-survey-conflict-inventory/CONFLICT-INVENTORY.md` — the
   conflicting-policy stratum source
 
+### Case-handling workflow, templates & policy thresholds (NEW — central to the eval & to D-25..D-28)
+- `.planning/phases/01-knowledge-survey-conflict-inventory/snapshots/` — approved reply templates:
+  `product complaint-within guarantee-template1/2/3.md` (A1–A9, B1–B13), `...out of guarantee-template.md`
+  (C1), `cancellation request-template1..9.md`, `change request-template*.md`,
+  `shipping queries & complaints-template1..5.md`, `billing-template.md`, `situational-template.md`
+- `.planning/phases/01-knowledge-survey-conflict-inventory/POLICY-THRESHOLD-INDEX.md` — THR-01..THR-18
+  (warranty windows, refund/discount caps); the bounds the "authorized offer" guard checks
+- `.planning/phases/01-knowledge-survey-conflict-inventory/CODE-MAP-templates.md` — code→template wiring
+- `.planning/phases/01-knowledge-survey-conflict-inventory/snapshots/WorkFlow.svg` — the macro-flow
+  decision graph (eligibility branches, "offered 50% before?" node) the templates implement
+- `.claude/hooks/pre_send_guard.py` + `.claude/agents/drafter.md` — the Phase-4 commitment guard that
+  D-26 reopens to become template/threshold-aware
+
 ### Grounding & reuse
 - `src/knowledge_mcp/server.py`, `src/selless_mcp/server.py` — the live MCP servers used during replay
 - `src/guards/pii.py` — Presidio `redact_text()` for golden-set PII handling
@@ -206,6 +256,16 @@ properties → reply*):
 - **GAP (Track B data):** the export CSV contains ticket **properties only — no reply text**. The
   first-public-reply reference must come from a **conversations export / `GET /tickets/{id}/conversations`**
   per ticket. Planner must specify how the conversation bodies are obtained and normalized.
+- **GAP (sequencing / Phase-4 dependency — BLOCKING per D-26):** `.claude/hooks/pre_send_guard.py`
+  currently blocks **all** commitment language and the classifier escalates all high-risk-by-keyword.
+  Before the Phase-5 gate can pass on the commitment-bearing flows (complaint/cancellation/shipping),
+  Phase 4 must be reopened to make the guard **template + threshold aware** (allow authorized
+  in-policy offers; block only out-of-template/over-threshold/ineligible/fabricated). The drafter must
+  also be able to **select + fill the correct template** (via Knowledge MCP `get_template`) and the
+  eligibility check must be grounded in Selless order data + POLICY-THRESHOLD-INDEX. Recommend a Phase-4
+  revisit (or an inserted phase) sequenced BEFORE Phase-5 execution. The harness can still be built and
+  run against the current pipeline to **quantify the false-escalation rate** as the baseline that
+  justifies the change.
 - **Downstream (Phase 6):** the eval verdict + per-stratum metrics feed the routing-gate / dashboard
   thresholds — keep the report schema stable.
 

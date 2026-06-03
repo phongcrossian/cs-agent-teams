@@ -139,6 +139,31 @@ Workflow/code check findings (folded into CONTEXT D-14..D-19 + GAPS):
 
 ---
 
+## Post-discussion investigation (user-requested) — workflow / case-handling check
+
+User asked to verify whether the agent team already updates ticket properties, and to fetch a real reply
+from Freshdesk (`.env.prd`, `shophelp.freshdesk.com`).
+
+Findings:
+- **No property-update capability.** classifier emits `{category, code, confidence, high_risk}`, extractor
+  emits `{order_ref, customer_email, issue_type, product_refs, ...}`, but the final verdict is only
+  `{action, body, citations}` / escalate — no Freshdesk property write; `reply_mcp` has `submit_reply` only.
+- **Live fetch worked.** Ticket 7732073's first public agent reply = template **B7** verbatim
+  (50% refund + 40% VIP discount), a within-guarantee non-defective product-complaint resolution.
+- **Critical:** this is the *correct templated flow*, but Phase-4 `pre_send_guard.py` (D-13) blocks all
+  commitment language → would escalate it. User decided to **reopen Phase 4** to make the guard
+  template + threshold aware. Captured as CONTEXT D-25..D-28; gate redefinition (D-27) and a BLOCKING
+  Phase-4 sequencing dependency recorded.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Guard template + threshold aware (revisit Phase 4) | Allow authorized in-policy offers; block only out-of-template/over-threshold/fabricated | ✓ |
+| v1 keep D-13 block-all, automate only no-money flows | Safe, low coverage, no Phase-4 change | |
+| Let Phase-5 eval measure/expose first | Quantify false-escalation before deciding | |
+| Discuss more before locking | | |
+
+---
+
 ## Claude's Discretion
 - JSONL/report schema and location; Ragas config; G-Eval prompt wording; how to expose classifier/extractor
   structured output for Track A; score persistence (Langfuse vs JSON); held-out split mechanics.
