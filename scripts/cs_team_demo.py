@@ -100,7 +100,9 @@ _TICKET_MAP: dict[str, dict] = {
 }
 
 # Claude Code CLI command — invokes the agent team headless via .claude/ directory
-_CLAUDE_CLI = ["claude", "--output-format", "json", "--no-interactive"]
+# -p/--print = non-interactive mode (outputs response and exits); --output-format json
+# for machine-parseable verdict output.
+_CLAUDE_CLI = ["claude", "--print", "--output-format", "json"]
 
 # Verdict schema expected from cs-lead
 _DRAFT_ACTION = "draft"
@@ -114,30 +116,61 @@ _ESCALATE_ACTION = "escalate"
 def _parse_verdict(raw_output: str) -> dict[str, Any]:
     """Parse cs-lead's JSON verdict from raw CLI output.
 
-    cs-lead must emit a verdict JSON on stdout matching:
-      {"action": "draft",    "body": "...", "citations": [...]}
-      {"action": "escalate", "reason": "...", "signals": {...}}
+    `claude --print --output-format json` wraps the model reply in an outer
+    JSON envelope:
+        {"type":"result","result":"<inner-JSON-string>", ...}
 
-    Falls back to scanning for the last JSON object in the output.
+    The inner `result` field is the actual verdict emitted by cs-lead.
+    We unwrap that first, then fall back to scanning for the last bare
+    {"action": ...} object in the output for robustness.
+
     Returns {"action": "escalate", "reason": "parse_error"} on failure (fail-closed).
     """
-    # Try last JSON object in output (cs-lead may emit intermediary trace lines)
-    candidates = re.findall(r"\{[^{}]*\}", raw_output, re.DOTALL)
-    for chunk in reversed(candidates):
-        try:
-            obj = json.loads(chunk)
-            if "action" in obj and obj["action"] in (_DRAFT_ACTION, _ESCALATE_ACTION):
-                return obj
-        except json.JSONDecodeError:
-            continue
-
-    # Try full output as JSON
+    # Primary path: unwrap the claude --output-format json envelope
     try:
-        obj = json.loads(raw_output.strip())
-        if "action" in obj:
-            return obj
+        outer = json.loads(raw_output.strip())
+        if isinstance(outer, dict) and "result" in outer:
+            inner_str = outer["result"]
+            if isinstance(inner_str, str):
+                try:
+                    inner = json.loads(inner_str.strip())
+                    if "action" in inner and inner["action"] in (_DRAFT_ACTION, _ESCALATE_ACTION):
+                        return inner
+                except json.JSONDecodeError:
+                    # inner might itself contain embedded JSON — fall through to scan
+                    pass
+            elif isinstance(inner_str, dict) and "action" in inner_str:
+                return inner_str
     except json.JSONDecodeError:
         pass
+
+    # Fallback: scan for last {"action": ...} object in raw output
+    # Use a broader pattern that handles nested objects via json.loads
+    raw = raw_output
+    start = 0
+    best: dict[str, Any] | None = None
+    while True:
+        idx = raw.find('"action"', start)
+        if idx == -1:
+            break
+        # Walk back to find the opening brace
+        brace_pos = raw.rfind("{", 0, idx)
+        if brace_pos == -1:
+            start = idx + 1
+            continue
+        # Try to parse from brace_pos onward with increasing length
+        for end in range(len(raw), brace_pos, -1):
+            try:
+                obj = json.loads(raw[brace_pos:end])
+                if isinstance(obj, dict) and obj.get("action") in (_DRAFT_ACTION, _ESCALATE_ACTION):
+                    best = obj
+                    break
+            except json.JSONDecodeError:
+                continue
+        start = idx + 1
+
+    if best is not None:
+        return best
 
     logger.warning("cs_team_demo: could not parse verdict from output (fail-closed → escalate)")
     return {"action": _ESCALATE_ACTION, "reason": "parse_error", "signals": {}}
