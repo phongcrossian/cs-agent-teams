@@ -34,7 +34,6 @@ _AGENT_FILES = [
 ]
 
 
-@pytest.mark.xfail(reason="Agent .md files not yet created — Wave 1/2", strict=True)
 @pytest.mark.parametrize("rel_path", _AGENT_FILES)
 def test_agent_file_exists(rel_path: str) -> None:
     """Each agent definition .md must exist under .claude/agents/."""
@@ -60,7 +59,6 @@ _SKILL_FILES = [
 ]
 
 
-@pytest.mark.xfail(reason="Skill SKILL.md files not yet created — Wave 2/3", strict=True)
 @pytest.mark.parametrize("rel_path", _SKILL_FILES)
 def test_skill_file_exists(rel_path: str) -> None:
     """Each skill SKILL.md must exist under .claude/skills/<name>/."""
