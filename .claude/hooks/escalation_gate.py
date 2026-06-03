@@ -54,9 +54,13 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re as _re
 import sys
 import tempfile
 from pathlib import Path
+
+# CR-02: safe run-id regex — blocks path traversal via env-var injection
+_SAFE_RUN_ID = _re.compile(r'^[A-Za-z0-9_\-]{1,128}$')
 
 # Signal key order: first match wins (mirrors should_suppress layer order)
 _SIGNAL_ORDER: list[tuple[str, str]] = [
@@ -123,9 +127,18 @@ def _derive_signals(payload: dict) -> dict:
 
 
 def _state_path() -> "Path | None":
-    """Return the Path to this run's state file, or None if CS_RUN_ID unset."""
+    """Return the Path to this run's state file, or None if CS_RUN_ID unset/invalid.
+
+    CR-02: CS_RUN_ID is validated against _SAFE_RUN_ID before use in any
+    filesystem path. An invalid (potentially traversal) run_id is treated as
+    unset: READ side will fail-closed (exit 2); WRITE side is a NO-OP.
+    """
     run_id = os.environ.get("CS_RUN_ID")
     if not run_id:
+        return None
+    if not _SAFE_RUN_ID.match(run_id):
+        # Invalid CS_RUN_ID — path traversal attempt or malformed value.
+        # Treat as unset: READ side fails closed; WRITE side is NO-OP.
         return None
     state_dir = Path(tempfile.gettempdir()) / "cs_run_state"
     return state_dir / f"{run_id}.json"
@@ -222,16 +235,38 @@ def main() -> None:
       - If accumulated signals contain any True -> exit 2 (BLOCK).
       - All-clean signals -> exit 0.
 
-    Fail-closed: malformed stdin -> escalate (exit 2 in final-veto context,
-    exit 1 otherwise — preserves prior non-final behaviour).
+    Fail-closed on parse error:
+      - stdin is read once into raw bytes first so we can attempt context
+        detection even when JSON parsing fails.
+      - If raw stdin contains "submit_reply" and "PreToolUse" (final-veto
+        context markers), any error exits 2 (BLOCK — fail-closed).
+      - Otherwise (WRITE side / SubagentStop / non-cs-team generic session),
+        any error exits 1 (non-blocking warning). This preserves the NO-OP
+        contract for unrelated PostToolUse/* sessions: Claude Code treats
+        non-2 non-zero as a non-blocking warning, so the tool still runs.
+      - Rationale: grounding_check.py and pre_send_guard.py run BEFORE this
+        hook in the PreToolUse@submit_reply chain (see settings.json) and
+        already exit 2 on malformed input — the chokepoint stays protected
+        even if this hook falls back to exit 1 on WRITE-side parse errors.
     """
+    # CR-01: read stdin once into raw_bytes so we can inspect content for
+    # context detection even when JSON parsing fails later.
     try:
-        payload = json.load(sys.stdin)
+        raw_bytes = sys.stdin.buffer.read()
+    except Exception:  # noqa: BLE001
+        raw_bytes = b""
 
-        # Detect PreToolUse@submit_reply context (final-risk veto)
+    try:
+        payload = json.loads(raw_bytes)
+
+        # Detect PreToolUse@submit_reply context (final-risk veto).
+        # CR-01 (WR-02): use AND — both conditions must hold simultaneously.
+        # OR was overly broad: any PreToolUse (regardless of tool) would
+        # have triggered the READ/veto path if settings.json ever widened
+        # the binding beyond submit_reply.
         is_final_veto = (
             payload.get("tool_name") == "submit_reply"
-            or payload.get("hook_event_name") == "PreToolUse"
+            and payload.get("hook_event_name") == "PreToolUse"
         )
 
         if is_final_veto:
@@ -275,6 +310,12 @@ def main() -> None:
 
     except Exception as exc:  # noqa: BLE001 — fail-closed
         print(json.dumps({"action": "escalate", "reason": f"escalation_gate:error:{exc}"}))
+        # CR-01: determine exit code based on raw stdin content.
+        # If raw bytes contain both final-veto context markers, exit 2 (BLOCK).
+        # Otherwise exit 1 (non-blocking) to preserve NO-OP for generic
+        # PostToolUse/* bindings in unrelated sessions.
+        if b'"submit_reply"' in raw_bytes and b'"PreToolUse"' in raw_bytes:
+            sys.exit(2)
         sys.exit(1)
 
 
