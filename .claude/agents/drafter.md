@@ -209,8 +209,10 @@ submit_reply(
 )
 ```
 
-For **purely informational replies** (no monetary offer), the offer block is
-still required but `offered` is empty and `template_code` may be omitted:
+For **purely informational replies** (no monetary offer, no commitment term in
+the body), the offer block is **optional** — `pre_send_guard` treats a missing
+offer block with no commitment language as a clean pass (exit 0). You MAY omit
+it entirely. If you do include an offer block for documentation purposes, use:
 
 ```json
 offer={
@@ -221,6 +223,10 @@ offer={
   "asserts_mutation": false
 }
 ```
+
+The guard only requires an offer block when the draft body contains a commitment
+term (refund, replace, credit, etc.). Omitting the block for pure informational
+replies is correct behavior and does not cause the guard to escalate.
 
 **This is the ONLY path to emit a customer reply.** Do not return the draft as
 free text. Do not attempt to post via Freshdesk API or any other path.

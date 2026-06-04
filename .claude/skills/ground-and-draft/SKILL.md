@@ -214,7 +214,10 @@ submit_reply(
 )
 ```
 
-**For purely informational replies (no monetary offer):**
+**For purely informational replies (no monetary offer, no commitment term in body):**
+The offer block is **optional** — `pre_send_guard` treats a missing offer block
+with no commitment language in the body as a clean pass (exit 0). You MAY omit
+it entirely. If included for documentation purposes:
 ```python
 offer={
     "sub_type": "Ask_About_Order",
@@ -224,6 +227,10 @@ offer={
     "asserts_mutation": False
 }
 ```
+The guard only requires an offer block when the body contains a commitment term
+(refund, replace, credit, etc.). Omitting the block for pure informational
+replies is correct behavior — the guard does not escalate on a missing block
+when no commitment term is present.
 
 **This is the ONLY path to emit a customer-facing reply.** The `PreToolUse`
 hook chain runs before the tool executes:
