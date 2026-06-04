@@ -240,3 +240,36 @@
 
 - ⚠️ BEFORE-LIVE BLOCKER: re-author an output guard before any non-DRY_RUN send (reference = struck-through D-26 spec).
 - Real Selless eligibility wiring (was 04-11).
+
+---
+
+## Session 3 — Workflow-validation re-discussion (2026-06-04)
+
+**Focus:** Why the template comes out wrong in `test-tickets.xlsx`; prove the always-draft workflow
+runs correctly on real PROD tickets; iterate AI-vs-CS until template + reply are correct. User priority:
+workflow-correctness first, keep it simple. Language: Vietnamese.
+
+**Areas discussed & selections:**
+
+1. **Execution path** — options: real `.claude/` agent-team / standalone `draft()` / hybrid.
+   → **Real agent-team (.claude/)** (D-35). Standalone `draft()` deprecated for validation.
+2. **Ground truth** — options: CS as reference (not absolute) / CS as absolute gold.
+   → **CS as absolute gold standard** (D-36). Every divergence = AI error to fix.
+3. **Properties scope** — options: minimal (sub-type+code+reply) / extended (+Flow/STEP/Rootcause/Resolution).
+   → **Extended** (D-37). All written to xlsx beside CS, divergences noted.
+4. **PROD safety** — options: read-only + DRY_RUN / allow sandbox post.
+   → **Read-only FD + Selless, absolute DRY_RUN** (D-39). Never POST to Freshdesk.
+5. **Stopping criterion** (follow-up, to resolve absolute-gold × extended × simple tension) —
+   options: 100% on core + advisory subjective / 100% on ALL / 100% on template code + Reply only.
+   → **100% on template code + Reply only** (D-38). Other props recorded + diff-noted, non-blocking.
+
+**Also captured:** dedicated AI-vs-CS checker agent that explains why AI differs and feeds fixes back,
+reasons always recorded in xlsx (D-40).
+
+**Immediate finding:** `test-tickets.xlsx` "AI Team value" column empty on all 30 sheets (iter-4 paused
+at 1/30) — must re-populate via the real-team path before comparison is meaningful.
+
+### Claude's discretion (session 3)
+- Checker agent count/shape + `.cs-compare` JSON schema.
+- Verdict payload shape for reporting computed Properties back to the xlsx.
+- Keep vs delete `draft()` once `collect()` is the validated path.

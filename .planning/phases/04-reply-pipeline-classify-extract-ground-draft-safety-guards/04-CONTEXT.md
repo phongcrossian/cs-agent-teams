@@ -54,6 +54,60 @@
 
 </pivot_decisions>
 
+<validation_decisions>
+## WORKFLOW-VALIDATION RE-DISCUSSION (2026-06-04) — D-35..D-40
+
+> Captured in a discuss-phase re-run focused on **proving the always-draft workflow runs correctly on
+> real PROD tickets** and **fixing why the template comes out wrong**. These sit ON TOP of D-29..D-34
+> (locked policy) and govern the validation harness + iteration loop (`scripts/test_tickets_run.py`,
+> output `test-tickets.xlsx`). Priority stated by user: **workflow-correctness first, keep it simple.**
+
+**Immediate finding (this session):** `test-tickets.xlsx` currently has the **"AI Team value" column
+empty** on all 30 sheets — the iter-4 run was paused at 1/30 (see `.continue-here.md`). The xlsx must be
+re-populated before any AI-vs-CS comparison is meaningful. The harness has TWO execution paths today —
+`collect()` (real `.claude/` team via `claude` CLI) and a standalone `draft()` shortcut
+(`_SUBTYPE_TEMPLATES` + `_build_draft_prompt` + `fetch_selless_order`). D-35 picks the real-team path.
+
+- **D-35 (locked) — Validate through the REAL agent-team.** The validation loop drives each ticket
+  through the real `.claude/` cs-agent-team (cs-lead + subagents + hooks) via the headless `claude` CLI
+  path (`collect()` / `cs_team_demo.py` machinery), NOT the standalone `draft()` shortcut. Rationale:
+  "đưa vào agent teams xử lý" — fidelity to production over speed. The standalone `draft()` path is
+  **deprecated for validation** (may remain as a debug aid but is not the source of truth).
+  ⚠️ Trade-off accepted: slower per ticket; acceptable for workflow-correctness fidelity.
+- **D-36 (locked) — CS Agent handling = absolute gold standard.** Every divergence between the AI output
+  and the actual CS-agent handling is treated as an **AI error to fix** (we do NOT argue "AI may be more
+  correct than CS"). This overrides the `.continue-here.md` advisory note that CS sometimes over-offers —
+  for this validation pass, CS is ground truth.
+- **D-37 (locked) — Properties scope = EXTENDED.** The harness computes and writes to `test-tickets.xlsx`
+  the extended property set side-by-side with CS values: `Customer_Request` sub-type, **template code**,
+  `Flow`, `STEP`, `Rootcause`, `Resolution status`, plus the **Reply** body. Every divergence from CS is
+  annotated with the reason (per D-40).
+- **D-38 (locked) — Stopping criterion = template code + Reply match CS 100%.** "Làm đi làm lại đến lúc
+  hết lỗi" is defined NARROWLY: the iteration loop ends when **template code AND Reply content match CS
+  on all tickets**. The other extended properties (sub-type, Flow, STEP, Rootcause, Resolution) are
+  **recorded + diff-noted for reference only** and do NOT block the loop. This deliberately avoids
+  non-convergence on subjective columns (Rootcause/Resolution) while keeping the user's core question
+  ("vì sao template không đúng") as the binding gate. Bám đúng "làm đơn giản".
+- **D-39 (locked) — PROD, strictly read-only + absolute DRY_RUN.** These are real PROD tickets.
+  Freshdesk PROD: **GET only** (ticket description_text + first public CS reply); the harness MUST never
+  POST a reply to Freshdesk. Selless PROD (`api.selless.com`): read-only, resolve by human order code
+  (`/po/search` → `/po/{id}`). Config: `selless_env=prod` (single source of truth, `src/config.py`,
+  commit `1a0d66a`); Freshdesk creds from `.env.prd`. Outputs ONLY to local gitignored `test-tickets.xlsx`
+  + `.test-tickets-data.jsonl`. No sandbox-post path is enabled.
+- **D-40 (locked) — Dedicated AI-vs-CS checker agent.** A dedicated checker (per-category, general-purpose
+  subagent reading `.cs-compare/<cat>.json`) compares AI vs CS for each ticket, classifies each
+  template/Reply divergence, **explains WHY they differ**, and feeds fix guidance back into the loop.
+  The "why-different" reason is **always recorded in the xlsx** (kept even after the divergence is fixed,
+  as an audit trail). Iteration = edit prompt/`_SUBTYPE_TEMPLATES`/map → re-run real team → rebuild
+  `.cs-compare` → spawn checker(s) → merge findings → rebuild xlsx → read divergence counts → repeat.
+
+### Claude's Discretion (validation)
+- Checker agent count/shape (per-category vs single), prompt wording, and the exact `.cs-compare` JSON
+  schema — pick the simplest that surfaces per-ticket template/Reply divergence + reason.
+- How the real-team `collect()` path reports computed Properties back for the xlsx (verdict payload shape).
+- Whether to keep `draft()` as a debug shortcut or delete it once `collect()` is the validated path.
+</validation_decisions>
+
 > **ARCHITECTURE PIVOT (2026-06-03).** Phase 4 is now built as a **standard Claude Code agent team**
 > (`.claude/` with `agents/`, `skills/`, `hooks/`, `CLAUDE.md`, MCP wiring) running **locally first**
 > (PoC via the developer's Claude subscription / `claude` CLI), later packaged as a **Layer-4 plugin**
@@ -221,6 +275,16 @@ failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold
 - Commit `070509a` — the exact pivot diff (docs-only; code rework pending = this phase's work)
 - `.planning/phases/01-knowledge-survey-conflict-inventory/CODE-MAP-templates.md` + the 26 template snapshots
   in `.../01-knowledge-survey-conflict-inventory/snapshots/*.md` — the local file-store grounding surface (D-31)
+
+### Validation harness (D-35..D-40 — READ for the workflow-validation loop)
+- `scripts/test_tickets_run.py` — the harness: `collect()` (real-team path, D-35), `draft()` (deprecated
+  standalone shortcut), `_SUBTYPE_TEMPLATES`, `_build_draft_prompt`, `fetch_selless_order`, `build_xlsx()`
+- `scripts/cs_team_demo.py` — production runner machinery reused by the harness (redaction, CLI invoke,
+  parse, pre/post-screen)
+- `test-tickets.xlsx` (gitignored output) + `.test-tickets-data.jsonl` (gitignored per-ticket records)
+- `.cs-compare/<category>.json` — checker-agent inputs (AI-vs-CS per-ticket verdicts)
+- `src/config.py` — `selless_env` single source of truth (commit `1a0d66a`); `.env.prd` — Freshdesk PROD creds
+- `.continue-here.md` (this phase dir) — blocking anti-patterns + paused iter-4 state
 
 ### This phase's design (READ THROUGH THE D-29/D-30 DELTA)
 - `docs/specs/2026-06-02-cs-agent-team-design.md` — the approved agent-team architecture, `.claude/`
