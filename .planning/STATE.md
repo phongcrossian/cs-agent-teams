@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 workflow-validation context captured (D-35..D-40)
-last_updated: "2026-06-04T10:02:15.371Z"
+last_updated: "2026-06-04T10:15:01.479Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 18
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [████████░░] 81%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [████████░░] 81%
 | Phase 04 P09 | 4 | 2 tasks | 2 files |
 | Phase 04 P10 | 12 | 2 tasks | 3 files |
 | Phase 04 P01 | 253 | 2 tasks | 6 files |
+| Phase 04 P02 | 410 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,9 @@ Recent decisions affecting current work:
 - [Phase ?]: D-26 supersedes D-13: pre_send_guard block-all replaced by authorize_offer §0 test; commitment lexicon demoted to tripwire
 - [Phase ?]: Deleted pre_send_guard, escalation_gate, grounding_check, authorized_offer per always-draft pivot; injection_screen + pii_redact remain as surviving safety floor
 - [Phase ?]: CS_RUN_ID env key removed from settings.json — escalation_gate stateful veto pointer no longer needed after hook deletion
+- [Phase 04]: D-33 always-draft: action=draft is the only verdict; escalation_hint is optional advisory signal, never suppresses draft
+- [Phase 04]: D-31 file-store grounding: KnowledgeMCP removed from settings.json; drafter uses subtype_to_code + get_template_from_file from local snapshots
+- [Phase 04]: D-34 flow-aware fallback: missing Selless order triggers verify-order/clarify-order-info flow; placeholder tokens only for infra-pending on valid order
 
 ### Pending Todos
 
@@ -153,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T09:59:33.134Z
+Last session: 2026-06-04T10:11:48.250Z
 Stopped at: Phase 4 workflow-validation context captured (D-35..D-40)
 Resume file: None

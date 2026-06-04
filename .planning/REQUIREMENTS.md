@@ -28,9 +28,9 @@ Requirements for the initial release. Each maps to roadmap phases.
 ### Reply Pipeline
 
 - [x] **REP-01**: AI re-classifies an incoming email/ticket into the correct support category
-- [ ] **REP-02**: AI extracts the key info needed to answer (order ref, customer, issue type)
+- [x] **REP-02**: AI extracts the key info needed to answer (order ref, customer, issue type)
 - [x] **REP-03** *(reworded by D-29, 2026-06-04)*: AI drafts a reply by selecting the correct **template** (via Workflow/CODE-MAP) and filling it from **Selless order data (production)** + the ticket. Grounding = approved template + order data; mandatory inline citations no longer required (D-11 retired).
-- [ ] **REP-04**: AI runs a self-critique pass scoring the draft against the quality rubric before any send
+- [x] **REP-04**: AI runs a self-critique pass scoring the draft against the quality rubric before any send
 - [x] **REP-05**: AI posts the approved reply into the correct existing Freshdesk ticket via API, idempotently (no duplicate sends)
 
 ### Safety & Rollout
@@ -81,9 +81,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEL-03 | Phase 3 | Complete |
 | SEL-04 | Phase 3 | Complete |
 | REP-01 | Phase 4 | Complete |
-| REP-02 | Phase 4 | Pending |
+| REP-02 | Phase 4 | Complete |
 | REP-03 | Phase 4 | Complete |
-| REP-04 | Phase 4 | Pending |
+| REP-04 | Phase 4 | Complete |
 | REP-05 | Phase 2 | Complete |
 | SAFE-01 | Phase 5 | Pending (rescoped D-30 — advisory scores) |
 | SAFE-02 | Phase 5 | Pending (rescoped D-30 — advisory bar) |
