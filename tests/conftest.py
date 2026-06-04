@@ -178,5 +178,11 @@ def selless_respx_mock():
     Mirror of respx_mock but pointed at the Selless API base URL (D-01).
     Used to test HttpSellessClient without live network.
     """
-    with respx_lib.mock(base_url="https://api.selless.dev") as mock:
+    from urllib.parse import urlsplit
+
+    from src.config import settings
+
+    parts = urlsplit(settings.selless_api_base_url)
+    host = f"{parts.scheme}://{parts.netloc}"  # match whatever selless_env resolves to
+    with respx_lib.mock(base_url=host) as mock:
         yield mock

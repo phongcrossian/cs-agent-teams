@@ -593,7 +593,7 @@ async def run_drafter(rec: dict, templates: str, selless: dict | None = None,
     return parsed if parsed is not None else {"_error": "parse_error"}
 
 
-_SELLESS_BASE = "https://api.selless.com/admin/csm/order/public/tickets"
+_SELLESS_BASE = settings.selless_api_base_url  # single source of truth (src/config.py: selless_env)
 
 
 async def draft(only_cat: str | None) -> None:

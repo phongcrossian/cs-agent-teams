@@ -2,8 +2,9 @@
 SellessClient — seam isolating the Selless API from MCP tools.
 
 Architecture boundary: use MockSellessClient for tests, HttpSellessClient for prod.
-Base URL: https://api.selless.dev/admin/csm/order/public/tickets
-(confirmed 2026-06-02, gateway-trust auth model — no token needed).
+Base URL: settings.selless_api_base_url (single source of truth — src/config.py).
+Resolved from selless_env: prod -> https://api.selless.com/..., dev -> https://api.selless.dev/...
+(gateway-trust auth model — no token needed).
 
 D-03: resolve_order is the ONLY search entry point; it enforces exact-key single-identity
 only and NEVER returns a fuzzy/browse list.

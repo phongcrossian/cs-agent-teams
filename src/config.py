@@ -10,7 +10,7 @@ import logging
 from enum import Enum
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode
 
 
@@ -119,11 +119,20 @@ class Settings(BaseSettings):
     # === Phase 3 additions — grounding layer =====================================
 
     # Selless API (D-01, gateway-trust model confirmed 2026-06-02)
+    # Single switch for the target environment. `prod` is the live data host
+    # (api.selless.com — orders resolvable by order code); `dev` is the staging
+    # host (api.selless.dev — returns empty for the historical sample tickets).
+    # Override env var: SELLESS_ENV=prod|dev. For a fully custom URL set
+    # SELLESS_API_BASE_URL directly (takes precedence over selless_env).
+    selless_env: str = Field(
+        default="prod",
+        description="Selless target env: 'prod' -> api.selless.com, 'dev' -> api.selless.dev.",
+    )
     selless_api_base_url: str = Field(
-        default="https://api.selless.dev/admin/csm/order/public/tickets",
+        default="",
         description=(
-            "Selless API base URL (public/tickets prefix). No auth token needed "
-            "— access gated at network/gateway layer."
+            "Selless API base URL (public/tickets prefix). If empty it is derived "
+            "from selless_env. No auth token — access gated at network/gateway layer."
         ),
     )
     # Reserve field for future gateway auth header if prod VPN requires it
@@ -167,6 +176,27 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return {int(x.strip()) for x in v.split(",") if x.strip()}
         return set()
+
+    # Selless host per environment switch (single source of truth).
+    _SELLESS_HOSTS = {  # noqa: RUF012
+        "prod": "https://api.selless.com",
+        "dev": "https://api.selless.dev",
+    }
+    _SELLESS_PATH = "/admin/csm/order/public/tickets"
+
+    @model_validator(mode="after")
+    def _resolve_selless_base_url(self) -> "Settings":
+        """Derive selless_api_base_url from selless_env when not explicitly set.
+
+        Precedence: explicit selless_api_base_url (env SELLESS_API_BASE_URL) >
+        selless_env (env SELLESS_ENV, prod|dev) > prod default.
+        """
+        if not self.selless_api_base_url:
+            host = self._SELLESS_HOSTS.get(
+                self.selless_env.strip().lower(), self._SELLESS_HOSTS["prod"]
+            )
+            self.selless_api_base_url = host + self._SELLESS_PATH
+        return self
 
     def __repr__(self) -> str:
         """Never expose api_key, webhook_secret, selless_api_gateway_key, voyage_api_key, or anthropic_api_key."""
