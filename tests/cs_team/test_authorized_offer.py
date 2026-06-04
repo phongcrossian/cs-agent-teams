@@ -523,3 +523,253 @@ class TestReasonStringDeterminism:
         r1 = authorize_offer("Review")[1]
         r2 = authorize_offer("Review", "B7", {"refund_pct": 10}, _IN_WARRANTY)[1]
         assert r1 == r2 == "unauthorized:force_escalate:no_flow"
+
+
+# ===========================================================================
+# CR-02 regression: per-sub-type allowed-offer-key gate
+# ===========================================================================
+
+
+class TestCR02RegressionSubtypeAllowedOfferKeys:
+    """Regression suite for CR-02: out-of-flow offer keys must be rejected.
+
+    Before the fix, threshold caps were checked globally — refund_pct on Cancel_Order
+    passed because the global cap (50%) was not exceeded, even though refund is not
+    a legal offer dimension for cancellation flows (THR-06: retention_pct only).
+    """
+
+    def test_refund_pct_on_cancel_order_rejected(self) -> None:
+        """CR-02: refund_pct on Cancel_Order must be rejected (only retention_pct allowed)."""
+        ok, reason = authorize_offer(
+            "Cancel_Order", "F1",
+            {"refund_pct": 50},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:offer_key_not_allowed:refund_pct", (
+            f"CR-02: refund_pct on Cancel_Order must be offer_key_not_allowed; got {reason!r}"
+        )
+
+    def test_retention_pct_on_return_rejected(self) -> None:
+        """CR-02: retention_pct on Return must be rejected (only refund_pct/discount_pct allowed)."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"retention_pct": 20},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:offer_key_not_allowed:retention_pct", (
+            f"CR-02: retention_pct on Return must be offer_key_not_allowed; got {reason!r}"
+        )
+
+    def test_comp_pct_on_partial_refund_rejected(self) -> None:
+        """CR-02: comp_pct on Partial_Refund must be rejected (only refund_pct/discount_pct allowed)."""
+        ok, reason = authorize_offer(
+            "Partial_Refund", "B7",
+            {"comp_pct": 30},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:offer_key_not_allowed:comp_pct", (
+            f"CR-02: comp_pct on Partial_Refund must be offer_key_not_allowed; got {reason!r}"
+        )
+
+    def test_refund_pct_on_change_shipping_address_rejected(self) -> None:
+        """CR-02: Change_Shipping_Address has no monetary pct dimension — any offered key rejected."""
+        ok, reason = authorize_offer(
+            "Change_Shipping_Address", "E1",
+            {"refund_pct": 10},
+            _IN_WARRANTY,
+            asserts_mutation=False,
+        )
+        assert ok is False
+        assert "offer_key_not_allowed" in reason
+
+    def test_refund_pct_on_replace_rejected(self) -> None:
+        """CR-02: Replace has no monetary pct offer — refund_pct must be rejected."""
+        ok, reason = authorize_offer(
+            "Replace", "A1",
+            {"refund_pct": 10},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert "offer_key_not_allowed" in reason
+
+    def test_cancel_order_retention_pct_still_authorized(self) -> None:
+        """Regression guard: Cancel_Order with retention_pct (the correct key) must still work."""
+        ok, reason = authorize_offer(
+            "Cancel_Order", "F1",
+            {"retention_pct": 20},
+            _IN_WARRANTY,
+        )
+        assert ok is True
+        assert reason == "authorized:F1"
+
+    def test_ask_about_delivery_status_comp_pct_still_authorized(self) -> None:
+        """Regression guard: Ask_About_Delivery_Status with comp_pct (THR-08) must still work."""
+        ok, reason = authorize_offer(
+            "Ask_About_Delivery_Status", "G5",
+            {"comp_pct": 50},
+            _IN_WARRANTY,
+        )
+        assert ok is True
+        assert reason == "authorized:G5"
+
+
+# ===========================================================================
+# WR-01 regression: unknown / mistyped offered keys rejected
+# ===========================================================================
+
+
+class TestWR01RegressionUnknownOfferedKeys:
+    """Regression suite for WR-01: unknown/mistyped offered keys must be rejected.
+
+    Before the fix, the THRESHOLD_CAPS iteration loop never checked offered keys
+    that were not recognized cap keys, so "refundpct":999 was silently dropped.
+    """
+
+    def test_typo_key_refundpct_rejected(self) -> None:
+        """WR-01: typo'd key 'refundpct' (missing underscore) must be rejected."""
+        ok, reason = authorize_offer(
+            "Partial_Refund", "B7",
+            {"refundpct": 999, "refund_pct": 50},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert "offer_key_not_allowed:refundpct" in reason, (
+            f"WR-01: typo'd 'refundpct' must be offer_key_not_allowed; got {reason!r}"
+        )
+
+    def test_entirely_unknown_key_rejected(self) -> None:
+        """WR-01: completely unknown key 'bonus_pct' must be rejected."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"bonus_pct": 10, "refund_pct": 50},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert "offer_key_not_allowed:bonus_pct" in reason
+
+    def test_valid_key_only_still_authorized(self) -> None:
+        """Regression guard: a valid key with no unknown keys must still be authorized."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": 50},
+            _IN_WARRANTY,
+        )
+        assert ok is True
+        assert reason == "authorized:B7"
+
+
+# ===========================================================================
+# WR-02 / WR-03 regression: invalid offered values rejected without raising
+# ===========================================================================
+
+
+class TestWR02WR03RegressionInvalidOfferedValues:
+    """Regression suite for WR-02 + WR-03: invalid offered values must be rejected.
+
+    Before the fix:
+      WR-02: negative values passed (-10 > 50 is False) and bool values passed
+             (True == 1, so True > 50 is False).
+      WR-03: string values raised TypeError instead of returning (False, reason).
+
+    All cases must now return (False, "unauthorized:invalid_offer_value:<key>")
+    and NEVER raise an exception.
+    """
+
+    def test_negative_refund_pct_rejected(self) -> None:
+        """WR-02: refund_pct=-10 must be rejected (negative is invalid)."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": -10},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:invalid_offer_value:refund_pct", (
+            f"WR-02: negative refund_pct must be invalid_offer_value; got {reason!r}"
+        )
+
+    def test_bool_true_refund_pct_rejected(self) -> None:
+        """WR-02: refund_pct=True must be rejected (bool is not a valid numeric pct)."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": True},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:invalid_offer_value:refund_pct", (
+            f"WR-02: bool refund_pct=True must be invalid_offer_value; got {reason!r}"
+        )
+
+    def test_bool_false_refund_pct_rejected(self) -> None:
+        """WR-02: refund_pct=False must also be rejected (bool subclass of int — type confusion)."""
+        ok, reason = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": False},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:invalid_offer_value:refund_pct"
+
+    def test_string_refund_pct_rejected_no_raise(self) -> None:
+        """WR-03: refund_pct='100' (string) must be rejected without raising TypeError."""
+        # This previously raised TypeError: '>' not supported between str and int.
+        try:
+            ok, reason = authorize_offer(
+                "Return", "B7",
+                {"refund_pct": "100"},
+                _IN_WARRANTY,
+            )
+        except Exception as exc:
+            raise AssertionError(
+                f"WR-03: authorize_offer must never raise on caller-supplied data; "
+                f"got {type(exc).__name__}: {exc}"
+            ) from exc
+        assert ok is False
+        assert reason == "unauthorized:invalid_offer_value:refund_pct", (
+            f"WR-03: string refund_pct must be invalid_offer_value; got {reason!r}"
+        )
+
+    def test_string_retention_pct_on_cancel_order_rejected_no_raise(self) -> None:
+        """WR-03: retention_pct='20' on Cancel_Order must not raise."""
+        try:
+            ok, reason = authorize_offer(
+                "Cancel_Order", "F1",
+                {"retention_pct": "20"},
+                _IN_WARRANTY,
+            )
+        except Exception as exc:
+            raise AssertionError(
+                f"WR-03: authorize_offer must not raise on string value; "
+                f"got {type(exc).__name__}: {exc}"
+            ) from exc
+        assert ok is False
+        assert "invalid_offer_value:retention_pct" in reason
+
+    def test_negative_retention_pct_rejected(self) -> None:
+        """WR-02: retention_pct=-5 on Cancel_Order must be rejected."""
+        ok, reason = authorize_offer(
+            "Cancel_Order", "F1",
+            {"retention_pct": -5},
+            _IN_WARRANTY,
+        )
+        assert ok is False
+        assert reason == "unauthorized:invalid_offer_value:retention_pct"
+
+    def test_valid_numeric_values_still_authorized(self) -> None:
+        """Regression guard: valid int and float values must still be authorized."""
+        # int
+        ok_int, _ = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": 50, "discount_pct": 40},
+            _IN_WARRANTY,
+        )
+        assert ok_int is True
+        # float
+        ok_float, _ = authorize_offer(
+            "Return", "B7",
+            {"refund_pct": 49.5, "discount_pct": 39.9},
+            _IN_WARRANTY,
+        )
+        assert ok_float is True

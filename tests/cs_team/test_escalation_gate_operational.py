@@ -367,3 +367,286 @@ class TestShouldEscalatePrecedenceUnit:
         assert "operational_action" in keys
         # operational_action must come after the five base signals (additive, no reorder)
         assert keys.index("operational_action") == 5
+
+
+# ---------------------------------------------------------------------------
+# CR-01 regression: explicit signals dict + customer_request must NOT bypass
+# ---------------------------------------------------------------------------
+
+class TestCR01RegressionExplicitSignalsWithCustomerRequest:
+    """Regression suite for CR-01 bypass: signals={all-False}+customer_request escalates.
+
+    Before the fix, _derive_signals returned the explicit signals dict WITHOUT
+    calling _derive_operational_action, so operational_action stayed False even
+    when customer_request="Review" was present in the same payload.
+
+    All three sub-cases from the bug report are covered:
+      - customer_request="Review"    (Rule 1)
+      - customer_request="Full_Refund" (Rule 1)
+      - mutation-asserting sub-type with no asserts_mutation key (Rule 3)
+    """
+
+    def test_explicit_signals_all_false_plus_review_sets_operational_action(self) -> None:
+        """Unit: signals={all-False} + customer_request='Review' → operational_action=True."""
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "signals": {
+                "low_confidence": False,
+                "high_risk_category": False,
+                "conflict": False,
+                "stale_only": False,
+                "missing_key": False,
+                "operational_action": False,
+            },
+            "customer_request": "Review",
+        }
+        derived = _EG._derive_signals(payload)
+        assert derived.get("operational_action") is True, (
+            "CR-01 regression: signals={all-False}+customer_request='Review' must set "
+            f"operational_action=True; got signals={derived}"
+        )
+
+    def test_explicit_signals_all_false_plus_full_refund_sets_operational_action(self) -> None:
+        """Unit: signals={all-False} + customer_request='Full_Refund' → operational_action=True."""
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "signals": {
+                "low_confidence": False,
+                "high_risk_category": False,
+                "conflict": False,
+                "stale_only": False,
+                "missing_key": False,
+                "operational_action": False,
+            },
+            "customer_request": "Full_Refund",
+        }
+        derived = _EG._derive_signals(payload)
+        assert derived.get("operational_action") is True, (
+            "CR-01 regression: signals={all-False}+customer_request='Full_Refund' must set "
+            f"operational_action=True; got signals={derived}"
+        )
+
+    def test_explicit_signals_all_false_plus_mutation_subtype_no_asserts_key(self) -> None:
+        """Unit: signals={all-False} + Change_Product_Variant + no asserts_mutation → operational_action=True."""
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "signals": {
+                "low_confidence": False,
+                "high_risk_category": False,
+                "conflict": False,
+                "stale_only": False,
+                "missing_key": False,
+                "operational_action": False,
+            },
+            "customer_request": "Change_Product_Variant",
+            # no asserts_mutation key → treated as "not explicitly False" → fail-closed
+        }
+        derived = _EG._derive_signals(payload)
+        assert derived.get("operational_action") is True, (
+            "CR-01 regression: signals={all-False}+Change_Product_Variant+no asserts_mutation "
+            f"must set operational_action=True; got signals={derived}"
+        )
+
+    def test_explicit_signals_plus_review_subprocess_write_then_read_returns_2(self) -> None:
+        """Subprocess: signals={all-False}+customer_request='Review' → WRITE exit 1, READ exit 2."""
+        run_id = _temp_run_id()
+        state_file = _state_file(run_id)
+        env = {"CS_RUN_ID": run_id}
+
+        try:
+            write_payload = {
+                "hook_event_name": "PostToolUse",
+                "signals": {
+                    "low_confidence": False,
+                    "high_risk_category": False,
+                    "conflict": False,
+                    "stale_only": False,
+                    "missing_key": False,
+                    "operational_action": False,
+                },
+                "customer_request": "Review",
+            }
+            write_proc = _run_hook("escalation_gate", write_payload, env=env)
+            assert write_proc.returncode == 1, (
+                f"CR-01: WRITE with explicit signals+Review must exit 1 (operational_action); "
+                f"got {write_proc.returncode}. stdout={write_proc.stdout!r}"
+            )
+
+            read_payload = {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "submit_reply",
+                "tool_input": {"body": "x", "citations": []},
+            }
+            read_proc = _run_hook("escalation_gate", read_payload, env=env)
+            assert read_proc.returncode == 2, (
+                f"CR-01: READ@submit_reply after signals+Review write must exit 2; "
+                f"got {read_proc.returncode}. stdout={read_proc.stdout!r}"
+            )
+        finally:
+            if state_file.exists():
+                state_file.unlink()
+
+    def test_explicit_signals_plus_full_refund_subprocess_returns_2(self) -> None:
+        """Subprocess: signals={all-False}+customer_request='Full_Refund' → READ exit 2."""
+        run_id = _temp_run_id()
+        state_file = _state_file(run_id)
+        env = {"CS_RUN_ID": run_id}
+
+        try:
+            write_payload = {
+                "hook_event_name": "PostToolUse",
+                "signals": {
+                    "low_confidence": False,
+                    "high_risk_category": False,
+                    "conflict": False,
+                    "stale_only": False,
+                    "missing_key": False,
+                    "operational_action": False,
+                },
+                "customer_request": "Full_Refund",
+            }
+            write_proc = _run_hook("escalation_gate", write_payload, env=env)
+            assert write_proc.returncode == 1, (
+                f"CR-01: WRITE with explicit signals+Full_Refund must exit 1; "
+                f"got {write_proc.returncode}."
+            )
+
+            read_payload = {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "submit_reply",
+                "tool_input": {"body": "x", "citations": []},
+            }
+            read_proc = _run_hook("escalation_gate", read_payload, env=env)
+            assert read_proc.returncode == 2, (
+                f"CR-01: READ@submit_reply after signals+Full_Refund must exit 2; "
+                f"got {read_proc.returncode}. stdout={read_proc.stdout!r}"
+            )
+        finally:
+            if state_file.exists():
+                state_file.unlink()
+
+    def test_explicit_signals_plus_mutation_subtype_subprocess_returns_2(self) -> None:
+        """Subprocess: signals={all-False}+Change_Product_Variant+no asserts_mutation → READ exit 2."""
+        run_id = _temp_run_id()
+        state_file = _state_file(run_id)
+        env = {"CS_RUN_ID": run_id}
+
+        try:
+            write_payload = {
+                "hook_event_name": "PostToolUse",
+                "signals": {
+                    "low_confidence": False,
+                    "high_risk_category": False,
+                    "conflict": False,
+                    "stale_only": False,
+                    "missing_key": False,
+                    "operational_action": False,
+                },
+                "customer_request": "Change_Product_Variant",
+                # no asserts_mutation key → fail-closed Rule 3
+            }
+            write_proc = _run_hook("escalation_gate", write_payload, env=env)
+            assert write_proc.returncode == 1, (
+                f"CR-01: WRITE with explicit signals+Change_Product_Variant must exit 1; "
+                f"got {write_proc.returncode}."
+            )
+
+            read_payload = {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "submit_reply",
+                "tool_input": {"body": "x", "citations": []},
+            }
+            read_proc = _run_hook("escalation_gate", read_payload, env=env)
+            assert read_proc.returncode == 2, (
+                f"CR-01: READ@submit_reply after signals+Change_Product_Variant must exit 2; "
+                f"got {read_proc.returncode}. stdout={read_proc.stdout!r}"
+            )
+        finally:
+            if state_file.exists():
+                state_file.unlink()
+
+
+# ---------------------------------------------------------------------------
+# WR-04 regression: any-source escalation (benign top-level + escalating nested)
+# ---------------------------------------------------------------------------
+
+class TestWR04RegressionAnySourceEscalation:
+    """Regression suite for WR-04: any-source-escalates (not first-source-wins).
+
+    Before the fix, _derive_operational_action assigned customer_request from the
+    FIRST source that had it. A benign top-level value masked a nested escalating one.
+
+    These tests prove that a nested escalating customer_request triggers escalation
+    even when the top-level customer_request is benign.
+    """
+
+    def test_benign_top_level_escalating_nested_customer_request_unit(self) -> None:
+        """Unit: top-level benign + nested escalating customer_request → operational_action=True."""
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "customer_request": "Ask_About_Order",   # benign — top level
+            "tool_result": {
+                "customer_request": "Review",         # escalating — nested
+            },
+        }
+        signals: dict = {}
+        _EG._derive_operational_action(payload, signals)
+        assert signals.get("operational_action") is True, (
+            "WR-04 regression: benign top-level customer_request must not mask "
+            f"nested 'Review'; got signals={signals}"
+        )
+
+    def test_benign_top_level_escalating_nested_full_refund_unit(self) -> None:
+        """Unit: top-level benign + nested Full_Refund → operational_action=True."""
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "customer_request": "Ask_About_Policy",  # benign
+            "result": {
+                "customer_request": "Full_Refund",   # escalating
+            },
+        }
+        signals: dict = {}
+        _EG._derive_operational_action(payload, signals)
+        assert signals.get("operational_action") is True, (
+            "WR-04 regression: benign top-level must not mask nested 'Full_Refund'; "
+            f"got signals={signals}"
+        )
+
+    def test_benign_top_level_escalating_nested_subprocess(self) -> None:
+        """Subprocess: benign top-level + nested escalating customer_request → READ exit 2."""
+        run_id = _temp_run_id()
+        state_file = _state_file(run_id)
+        env = {"CS_RUN_ID": run_id}
+
+        try:
+            write_payload = {
+                "hook_event_name": "PostToolUse",
+                "customer_request": "Ask_About_Order",  # benign top-level
+                "tool_result": {
+                    "customer_request": "Review",        # escalating nested
+                },
+            }
+            write_proc = _run_hook("escalation_gate", write_payload, env=env)
+            assert write_proc.returncode in (0, 1), (
+                f"WR-04: WRITE must not crash; got {write_proc.returncode} "
+                f"stderr={write_proc.stderr!r}"
+            )
+            # Verify operational_action was set True
+            assert write_proc.returncode == 1, (
+                f"WR-04: WRITE with nested escalating Review must exit 1; "
+                f"got {write_proc.returncode}. stdout={write_proc.stdout!r}"
+            )
+
+            read_payload = {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "submit_reply",
+                "tool_input": {"body": "x", "citations": []},
+            }
+            read_proc = _run_hook("escalation_gate", read_payload, env=env)
+            assert read_proc.returncode == 2, (
+                f"WR-04: READ@submit_reply must exit 2 when nested Review was written; "
+                f"got {read_proc.returncode}. stdout={read_proc.stdout!r}"
+            )
+        finally:
+            if state_file.exists():
+                state_file.unlink()
