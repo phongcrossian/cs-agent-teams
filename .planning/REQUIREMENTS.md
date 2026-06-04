@@ -37,7 +37,7 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 - [ ] **SAFE-01** *(rescoped by D-30)*: An offline evaluation harness scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference), reporting **template-selection correctness + reply-quality** (faithfulness/correctness/tone) — **advisory scores**, not a hard gate
 - [ ] **SAFE-02** *(rescoped by D-30)*: Go-live is informed by the offline-eval scores (advisory bar) — no longer a hard "0-UNAUTHORIZED-commitments" block (D-21/D-27 retired)
-- [ ] **SAFE-03** *(ADVISORY per D-30)*: ~~auto-routes high-risk tickets to a human instead of auto-answering~~ → downgraded to optional/advisory routing; the always-draft pipeline does not block. ⚠️ Re-evaluate for money/legal before any live send
+- [x] **SAFE-03** *(ADVISORY per D-30)*: ~~auto-routes high-risk tickets to a human instead of auto-answering~~ → downgraded to optional/advisory routing; the always-draft pipeline does not block. ⚠️ Re-evaluate for money/legal before any live send
 - [~] **SAFE-04** *(SUPERSEDED/REMOVED by D-30, 2026-06-04)*: ~~An output guard blocks commitment-language the system is not authorized to make~~ → the hard `pre_send_guard` block is retired; the pipeline always drafts. Offers are filled per the chosen template.
 - [ ] **SAFE-05**: A staged rollout control sends AI replies to a configurable percentage of volume (5% → 100%) with deterministic, stable bucketing
 - [ ] **SAFE-06**: A live quality dashboard monitors AI reply performance, and a kill-switch can immediately halt auto-sending

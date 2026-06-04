@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 workflow-validation context captured (D-35..D-40)
-last_updated: "2026-06-04T09:52:24.773Z"
+last_updated: "2026-06-04T10:02:15.371Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 17
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 ## Current Position
 
 Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [████████░░] 76%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Progress: [████████░░] 76%
 | Phase 04 P08 | 10 | 2 tasks | 2 files |
 | Phase 04 P09 | 4 | 2 tasks | 2 files |
 | Phase 04 P10 | 12 | 2 tasks | 3 files |
+| Phase 04 P01 | 253 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [03-04]: PydanticDeprecatedSince211 in audit.py:69 (model_fields on instance) is harmless — tidy to class access in a later plan
 - [Phase ?]: operational_action placed after five base signals in _SIGNAL_ORDER (additive per D-08)
 - [Phase ?]: D-26 supersedes D-13: pre_send_guard block-all replaced by authorize_offer §0 test; commitment lexicon demoted to tripwire
+- [Phase ?]: Deleted pre_send_guard, escalation_gate, grounding_check, authorized_offer per always-draft pivot; injection_screen + pii_redact remain as surviving safety floor
+- [Phase ?]: CS_RUN_ID env key removed from settings.json — escalation_gate stateful veto pointer no longer needed after hook deletion
 
 ### Pending Todos
 
@@ -150,6 +153,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T09:52:24.766Z
+Last session: 2026-06-04T09:59:33.134Z
 Stopped at: Phase 4 workflow-validation context captured (D-35..D-40)
 Resume file: None
