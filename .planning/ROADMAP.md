@@ -86,7 +86,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. ~~High-risk tickets are auto-routed to a human — any high-risk signal escalates~~ → *(D-30: ADVISORY/optional, non-blocking; always-draft. ⚠️ revisit money/legal before live send)*
   4. ~~An output guard blocks unauthorized commitments (out-of-template / over-threshold)~~ → *(SUPERSEDED by D-30, 2026-06-04: the hard `pre_send_guard` block is REMOVED — offers are filled per the chosen template, no block).* Email body is still treated as untrusted data (delimited, **injection-screened — retained, D-14**).
 **Plans**: 6 plans (3 waves; RE-PLANNED 2026-06-04 from scratch for the D-29/D-30 always-draft PoC pivot, then targeted-revised to add the test-suite cleanup (04-04) + subagent-skill rework (04-05) — D-31..D-34 code rework; the prior 12 plans 04-00..04-11 were built for the now-retired RAG + fail-closed authorized-offer-guard architecture and are archived in _superseded/d29-d30-pivot/. New numbering from 04-00. MVP vertical slices: file-store + dep-strip / hook-deletion (Wave 1, parallel) → always-draft agent-team rework + subagent-skill rework (Wave 2, parallel) → end-to-end always-draft DRY_RUN demo + cs_team test-suite cleanup (Wave 3, parallel))
-- [ ] 04-00-PLAN.md — Local Template + Workflow/CODE-MAP file-store loader (get_template_from_file / subtype_to_code, reads the 26 Phase-1 snapshots; no RAG/MCP) + strip voyageai/pgvector(RAG)/ragas from pyproject.toml (D-31/REP-03, Wave 1)
+- [x] 04-00-PLAN.md — Local Template + Workflow/CODE-MAP file-store loader (get_template_from_file / subtype_to_code, reads the 26 Phase-1 snapshots; no RAG/MCP) + strip voyageai/pgvector(RAG)/ragas from pyproject.toml (D-31/REP-03, Wave 1)
 - [ ] 04-01-PLAN.md — DELETE the 4 retired guard hooks (pre_send_guard, escalation_gate, grounding_check, authorized_offer) + their settings.json wiring; KEEP injection_screen (D-14) + pii_redact (D-04); deletion-assertion test (D-32/SAFE-04/SAFE-03, Wave 1)
 - [ ] 04-02-PLAN.md — Always-draft agent-team rework: remove KnowledgeMCP from settings.json; cs-lead/classifier/extractor/drafter/critic agents + reply-pipeline/ground-and-draft skills → file-store grounding (D-31), action=draft + optional advisory escalation_hint (D-33), flow-aware Selless fallback (D-34); no semantic_search/mandatory-citations/D-26 gate; D-03/D-04/D-14 retained (REP-01/02/03/04 + SAFE-03, Wave 2)
 - [ ] 04-03-PLAN.md — Rework scripts/cs_team_demo.py to always-draft + advisory hint + D-34 fallback (no deleted-guard imports, file-store grounded, DRY_RUN submit_reply, injection_screen as advisory pre-screen); fixtures + always-draft contract test across benign/high-risk/injection/missing-order (SAFE-03/SAFE-04/REP-03, Wave 3)
@@ -139,7 +139,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 12/12 (stale) | Reopened (D-29/D-30 rework) | - |
+| 4. Reply Pipeline + Safety Guards | 1/6 | In Progress|  |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
