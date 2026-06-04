@@ -22,9 +22,9 @@ dependencies = [
     "python-dotenv==1.2.2",
     "structlog==25.5.0",
     # Phase 3 additions — grounding layer
+    # NOTE: voyageai and pgvector (RAG use) removed per D-29 stack delta (2026-06-04)
+    # Selless MCP and template file-store do not require embedding/vector deps.
     "fastmcp==3.3.1",
-    "voyageai==0.3.7",
-    "pgvector>=0.4.2",
 ]
 
 [project.optional-dependencies]
