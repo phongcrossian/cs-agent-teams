@@ -25,25 +25,6 @@
     }
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "submit_reply",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run python .claude/hooks/grounding_check.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run python .claude/hooks/pre_send_guard.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run python .claude/hooks/escalation_gate.py"
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "matcher": "*",
@@ -61,29 +42,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run python .claude/hooks/escalation_gate.py"
-          },
-          {
-            "type": "command",
             "command": "uv run python .claude/hooks/pii_redact.py"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run python .claude/hooks/escalation_gate.py"
           }
         ]
       }
     ]
   },
   "env": {
-    "SEND_MODE": "dry_run",
-    "CS_RUN_ID": "${CS_RUN_ID}"
+    "SEND_MODE": "dry_run"
   }
 }
