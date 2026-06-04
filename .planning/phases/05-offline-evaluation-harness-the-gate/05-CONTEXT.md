@@ -122,6 +122,7 @@ properties → reply*):
   in Track A and in the escalation-correctness check.
 
 ### Quality Bar / Go-Live Gate
+> **SUPERSEDED 2026-06-04 (D-30, user-confirmed).** The hard zero-tolerance gates below (D-20/D-21/D-22 and the D-27 "0 UNAUTHORIZED commitments" / 100%-escalation gate) are **RETIRED**. After a 30-ticket live test the product pivoted to a **PoC-first, always-draft** pipeline with **no hard guard/escalation** (see REQUIREMENTS D-29/D-30). The Phase-5 gate becomes **ADVISORY**: it scores **(i) template/flow-selection correctness** and **(ii) reply quality** (faithfulness/correctness/tone) vs the reference replies and **reports** them — it does not hard-block go-live. D-25/D-26/D-28 (authorized-offer guard) are also retired (the guard itself is removed). ⚠️ Revisit a safety gate before any live (non-DRY_RUN) send.
 - **D-20:** Gate structure = **hard zero-tolerance gates + scored thresholds**. Verdict = PASS only when
   BOTH are satisfied. No averaging away a safety failure.
 - **D-21:** **Hard zero-tolerance gates (confirmed by user):** (a) **0 UNAUTHORIZED commitments**

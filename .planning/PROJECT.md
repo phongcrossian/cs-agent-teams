@@ -59,12 +59,14 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 
 ## Constraints
 
+> **PIVOT 2026-06-04 (D-29/D-30):** dropped semantic RAG/Voyage and the hard output-guard/escalation constraints — see updated bullets below.
+
 - **Integration**: AI must post replies through the **Freshdesk API into the existing ticket** — Why: keep full conversation history intact inside Freshdesk for agents.
 - **Data access**: Selless reads go through a **dedicated MCP** with scoped permissions/rate-limit/logging — Why: native Selless APIs are scattered and not designed for AI; uncontrolled access is unsafe.
-- **Architecture**: keep **two separate MCPs** — Selless (transactional, real-time, lookup-by-ID) and Knowledge (semantic RAG, centralized, cited) — Why: different update cadence, query model, and quality-control needs; mixing them is an architectural mistake.
-- **Quality**: nothing goes live before clearing the offline-eval bar; high-risk categories always escalate to a human — Why: 23k/week volume makes a bad auto-reply high-blast-radius.
-- **Rollout**: offline eval → shadow mode → live 5% → scale to 100% — Why: de-risk a large-volume rollout incrementally.
-- **Knowledge readiness**: knowledge base must be surveyed and centralized before AI relies on it — Why: scattered/conflicting sources cause hallucinations; AI must not read raw Confluence/Sheets per-reply.
+- **Grounding** *(revised D-29)*: replies are grounded in the **local Template library + Workflow/CODE-MAP** (selected template, exact/keyed lookup) plus **Selless order data (production)**. **No semantic RAG / no Voyage embeddings.** The Knowledge MCP is reduced to template/exact lookup (or retired); the Selless MCP stays.
+- **Quality** *(revised D-30)*: PoC-first, **always-draft** pipeline — the hard output guard and hard high-risk escalation are RETIRED; the offline eval is **advisory** (scores, not a go-live block). Remaining safety floor: injection screening (D-14) + PII redaction (D-04) + kill-switch. ⚠️ 23k/week volume still makes a bad auto-reply high-blast-radius — revisit before any live (non-DRY_RUN) send.
+- **Rollout**: offline eval (advisory) → shadow mode → live 5% → scale to 100% — Why: de-risk a large-volume rollout incrementally.
+- **Knowledge readiness** *(revised D-29)*: the reply templates + workflow mapping (from the Phase-1 survey, local) are the knowledge surface; no per-reply reads of raw Confluence/Sheets and no RAG index dependency.
 
 ## Key Decisions
 
@@ -74,12 +76,14 @@ AI sends accurate, trustworthy customer replies at scale so support volume grows
 |----------|-----------|---------|
 | Phase 1 answers customers only; no operational actions | De-risk; prove reply quality before automating ops | — Pending |
 | Build a dedicated MCP for Selless reads | Native APIs scattered, not AI-ready; need scoped/controlled access | — Pending |
-| Two separate MCPs (Selless transactional + Knowledge RAG) | Different cadence, query model, and QC needs | — Pending |
-| Centralize knowledge into a RAG store with citations | Cannot reliably read scattered Confluence/Sheets per-reply; need anti-hallucination grounding | — Pending |
-| Offline eval on a golden set before any live use | Establish a measurable quality bar before exposing customers | — Pending |
+| Two separate MCPs (Selless transactional + Knowledge RAG) | Different cadence, query model, and QC needs | — Superseded (D-29): Knowledge RAG dropped; Selless stays |
+| Centralize knowledge into a RAG store with citations | Cannot reliably read scattered Confluence/Sheets per-reply; need anti-hallucination grounding | — Superseded (D-29): use local Template + Workflow/CODE-MAP, no RAG |
+| Offline eval on a golden set before any live use | Establish a measurable quality bar before exposing customers | — Revised (D-30): advisory scores, not a hard go-live block |
 | Rollout: offline eval → shadow → 5% live → scale | Incremental de-risking at high volume | — Pending |
-| Auto-escalate high-risk tickets (money/legal/complex) to agents | Limit blast radius of wrong answers | — Pending |
+| Auto-escalate high-risk tickets (money/legal/complex) to agents | Limit blast radius of wrong answers | — Superseded (D-30): advisory/optional; always-draft. ⚠️ revisit before live |
 | Knowledge survey is a lightweight inventory, not full collection, before planning | Avoid blocking on a "perfect" KB; detailed ingest is its own phase | — Pending |
+| **D-29** (2026-06-04): Ground replies on local **Template + Workflow/CODE-MAP + Selless (prod)**; drop semantic RAG/Voyage | Live test: RAG path could not draft (empty KB, no Voyage); templates are the real CS knowledge surface | — Active |
+| **D-30** (2026-06-04): **Always-draft** PoC pipeline; retire hard guard (D-26)/escalation (D-08)/citations (D-11)/zero-UNAUTHORIZED gate (D-27) | PoC needs to produce replies for every ticket; guard blocked everything | — Active. ⚠️ removes the auto-send safety layer — revisit before live |
 
 ## Evolution
 
@@ -99,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 — Phase 4 (Reply Pipeline + Safety Guards) complete (REOPENED for authorized-offer guard): cs-agent-team pipeline + 5 deterministic hooks shipped (REP-01..04, SAFE-03/04); block-all D-13 → D-26 authorized-offer + D-27 gate; verification 4/4 must-haves (human_needed: 2 live round-trips + done safety-contract update in 04-HUMAN-UAT.md); 2 critical code-review bypasses fixed; RD-Q2/RD-Q3 real eligibility deferred to 04-11. Next: Phase 5 offline-eval gate.*
+*Last updated: 2026-06-04 — PIVOT (D-29/D-30): after a 30-ticket live test, dropped semantic RAG/Voyage and reground replies on local Template + Workflow/CODE-MAP + Selless (prod); retired the hard output guard / escalation / mandatory citations (always-draft PoC); rescoped the offline-eval gate to advisory. Safety floor now = injection screening + PII redaction + kill-switch. ⚠️ revisit the removed guard before any live (non-DRY_RUN) send. (Prior: Phase 4 authorized-offer guard rework complete.)*

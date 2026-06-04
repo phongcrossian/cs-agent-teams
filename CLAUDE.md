@@ -9,16 +9,20 @@ An AI system that automates customer-support **email** for a US e-commerce busin
 
 ### Constraints
 
+> **PIVOT 2026-06-04 (D-29/D-30):** after a 30-ticket live test, dropped semantic RAG/Voyage and the hard output-guard/escalation constraints. Reply grounding = local **Template + Workflow/CODE-MAP + Selless (prod)**; pipeline is **always-draft** (PoC-first). Safety floor = injection screening (D-14) + PII redaction (D-04) + kill-switch. See revised bullets below. ⚠️ revisit the removed guard before any live (non-DRY_RUN) send.
+
 - **Integration**: AI must post replies through the **Freshdesk API into the existing ticket** — Why: keep full conversation history intact inside Freshdesk for agents.
 - **Data access**: Selless reads go through a **dedicated MCP** with scoped permissions/rate-limit/logging — Why: native Selless APIs are scattered and not designed for AI; uncontrolled access is unsafe.
-- **Architecture**: keep **two separate MCPs** — Selless (transactional, real-time, lookup-by-ID) and Knowledge (semantic RAG, centralized, cited) — Why: different update cadence, query model, and quality-control needs; mixing them is an architectural mistake.
-- **Quality**: nothing goes live before clearing the offline-eval bar; high-risk categories always escalate to a human — Why: 23k/week volume makes a bad auto-reply high-blast-radius.
-- **Rollout**: offline eval → shadow mode → live 5% → scale to 100% — Why: de-risk a large-volume rollout incrementally.
-- **Knowledge readiness**: knowledge base must be surveyed and centralized before AI relies on it — Why: scattered/conflicting sources cause hallucinations; AI must not read raw Confluence/Sheets per-reply.
+- **Architecture** *(revised D-29)*: the **Selless MCP** (transactional, real-time, lookup-by-ID) stays. The Knowledge MCP is reduced to **local template / exact-keyed lookup** (or retired) — **no semantic RAG, no embeddings**. (Was: two MCPs incl. a semantic-RAG Knowledge server.)
+- **Quality** *(revised D-30)*: PoC-first **always-draft** pipeline — the hard output guard and hard high-risk escalation are RETIRED; the offline eval is **advisory** (scores, not a go-live block). ⚠️ 23k/week volume still makes a bad auto-reply high-blast-radius — revisit before any live (non-DRY_RUN) send.
+- **Rollout**: offline eval (advisory) → shadow mode → live 5% → scale to 100% — Why: de-risk a large-volume rollout incrementally.
+- **Knowledge readiness** *(revised D-29)*: the local **reply templates + workflow mapping** (from the Phase-1 survey) are the knowledge surface; no per-reply reads of raw Confluence/Sheets and no RAG index dependency.
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:research/STACK.md -->
 ## Technology Stack
+
+> **PIVOT 2026-06-04 (D-29/D-30) — stack deltas.** The semantic-RAG layer is dropped for the PoC. **No longer used:** Voyage `voyage-3-large` embeddings, pgvector **as a RAG/vector store**, the Knowledge **semantic-RAG** MCP, and Ragas (RAG retrieval/grounding eval). **Replaced by:** a local **Template + Workflow/CODE-MAP** store (exact/keyed `get_template`), filled with **Selless MCP** (production) order data. **Still in:** Claude Sonnet/Haiku, Selless MCP, Freshdesk REST API v2, Anthropic SDK (prompt caching/Batch), Langfuse (optional). `voyageai`/RAG/Ragas deps are slated for removal from `pyproject.toml`. The table below is retained for historical context; read it through this delta. ⚠️ dropping RAG removes the citation-grounding anti-hallucination layer — revisit before any live send.
 
 ## Recommended Stack
 ### Core Technologies

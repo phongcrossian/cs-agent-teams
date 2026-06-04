@@ -3,6 +3,9 @@
 **Defined:** 2026-05-27
 **Core Value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
 
+> **PIVOT — 2026-06-04 (D-29 / D-30, user-confirmed).** A live 30-ticket test showed the RAG-grounded path could not draft (empty KB, no Voyage key). The product direction is now **PoC-first, always-draft**: reply grounding = **Template library (local) + Workflow/CODE-MAP (local) + Selless API (production)**; **semantic RAG / Voyage embeddings dropped (KB-05 superseded)**; the **hard output guard / escalation / mandatory-citation requirements are retired** (SAFE-04 superseded; SAFE-03 → advisory; D-08/D-10/D-11/D-13/D-26/D-27 retired). Remaining safety floor: injection screening (D-14) + PII redaction (D-04) + kill-switch (SAFE-06).
+> ⚠️ **Trade-off:** removing the guard lets the AI auto-send unauthorized refund/credit/legal commitments at scale — accepted as a deliberate PoC-direction decision; revisit before any live (non-DRY_RUN) send.
+
 ## v1 Requirements
 
 Requirements for the initial release. Each maps to roadmap phases.
@@ -13,7 +16,7 @@ Requirements for the initial release. Each maps to roadmap phases.
 - [x] **KB-02**: Knowledge survey produces a conflict inventory flagging stale, contradictory, or missing policy content
 - [x] **KB-03**: An ingest → normalize → index pipeline builds a centralized RAG store from the surveyed sources
 - [x] **KB-04**: Knowledge content can be re-synced/re-indexed when policies change
-- [x] **KB-05**: An MCP Knowledge server answers semantic queries over the RAG store and returns source citations with each result
+- [~] **KB-05** *(SUPERSEDED by D-29, 2026-06-04)*: ~~An MCP Knowledge server answers semantic queries over the RAG store and returns source citations~~ → replaced by **local template lookup (exact/keyed `get_template`) + Workflow/CODE-MAP mapping**. No semantic search, no Voyage embeddings.
 
 ### Transactional Data (MCP Selless)
 
@@ -26,16 +29,16 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 - [x] **REP-01**: AI re-classifies an incoming email/ticket into the correct support category
 - [ ] **REP-02**: AI extracts the key info needed to answer (order ref, customer, issue type)
-- [x] **REP-03**: AI drafts a reply grounded in retrieved order data and knowledge-base content (no ungrounded claims)
+- [x] **REP-03** *(reworded by D-29, 2026-06-04)*: AI drafts a reply by selecting the correct **template** (via Workflow/CODE-MAP) and filling it from **Selless order data (production)** + the ticket. Grounding = approved template + order data; mandatory inline citations no longer required (D-11 retired).
 - [ ] **REP-04**: AI runs a self-critique pass scoring the draft against the quality rubric before any send
 - [x] **REP-05**: AI posts the approved reply into the correct existing Freshdesk ticket via API, idempotently (no duplicate sends)
 
 ### Safety & Rollout
 
-- [ ] **SAFE-01**: An offline evaluation harness scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference), reporting faithfulness/correctness metrics
-- [ ] **SAFE-02**: Go-live is gated on the offline-eval score meeting a defined quality bar
-- [ ] **SAFE-03**: A guardrail layer auto-routes high-risk tickets (money/refund, legal/complaints, complex/ambiguous) to a human agent instead of auto-answering
-- [x] **SAFE-04**: An output guard blocks commitment-language (e.g. promising refunds/actions) the system is not authorized to make
+- [ ] **SAFE-01** *(rescoped by D-30)*: An offline evaluation harness scores AI replies against a golden dataset of historical Freshdesk tickets (real agent replies as reference), reporting **template-selection correctness + reply-quality** (faithfulness/correctness/tone) — **advisory scores**, not a hard gate
+- [ ] **SAFE-02** *(rescoped by D-30)*: Go-live is informed by the offline-eval scores (advisory bar) — no longer a hard "0-UNAUTHORIZED-commitments" block (D-21/D-27 retired)
+- [ ] **SAFE-03** *(ADVISORY per D-30)*: ~~auto-routes high-risk tickets to a human instead of auto-answering~~ → downgraded to optional/advisory routing; the always-draft pipeline does not block. ⚠️ Re-evaluate for money/legal before any live send
+- [~] **SAFE-04** *(SUPERSEDED/REMOVED by D-30, 2026-06-04)*: ~~An output guard blocks commitment-language the system is not authorized to make~~ → the hard `pre_send_guard` block is retired; the pipeline always drafts. Offers are filled per the chosen template.
 - [ ] **SAFE-05**: A staged rollout control sends AI replies to a configurable percentage of volume (5% → 100%) with deterministic, stable bucketing
 - [ ] **SAFE-06**: A live quality dashboard monitors AI reply performance, and a kill-switch can immediately halt auto-sending
 
@@ -72,7 +75,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | KB-02 | Phase 1 | Complete |
 | KB-03 | Phase 3 | Complete |
 | KB-04 | Phase 3 | Complete |
-| KB-05 | Phase 3 | Complete |
+| KB-05 | Phase 3 | Superseded (D-29) — local template lookup, no RAG |
 | SEL-01 | Phase 3 | Complete |
 | SEL-02 | Phase 3 | Complete |
 | SEL-03 | Phase 3 | Complete |
@@ -82,10 +85,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REP-03 | Phase 4 | Complete |
 | REP-04 | Phase 4 | Pending |
 | REP-05 | Phase 2 | Complete |
-| SAFE-01 | Phase 5 | Pending |
-| SAFE-02 | Phase 5 | Pending |
-| SAFE-03 | Phase 4 | Pending |
-| SAFE-04 | Phase 4 | Complete |
+| SAFE-01 | Phase 5 | Pending (rescoped D-30 — advisory scores) |
+| SAFE-02 | Phase 5 | Pending (rescoped D-30 — advisory bar) |
+| SAFE-03 | Phase 4 | Advisory (D-30 — non-blocking) |
+| SAFE-04 | Phase 4 | Superseded (D-30 — guard removed) |
 | SAFE-05 | Phase 7 | Pending |
 | SAFE-06 | Phase 6 | Pending |
 
@@ -96,4 +99,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-05-27*
-*Last updated: 2026-05-27 after roadmap creation (traceability mapped to 7 phases)*
+*Last updated: 2026-06-04 — PoC pivot (D-29/D-30): dropped semantic RAG/Voyage (KB-05 superseded), reground on Template+Workflow+Selless (REP-03), retired hard guard/escalation/citations (SAFE-04 superseded, SAFE-03 advisory), rescoped eval gate to advisory (SAFE-01/02).*

@@ -57,6 +57,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 02-06-PLAN.md — Retry/dead-letter hardening (D-10, PostgresDeadLetterSink + exhausted-sweeper) + main.py wiring + sandbox e2e demo proving exactly-once incl. crash-after-post (D-03) (Wave 4)
 
 ### Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)
+> **PIVOT (D-29, 2026-06-04):** the **Knowledge semantic-RAG MCP is DEPRECATED** (no Voyage embeddings, no semantic_search). Grounding source is now the **local template store + Workflow/CODE-MAP** (exact `get_template`/keyed lookup) plus the **Selless MCP** (production reads), which both remain. Criterion #1 (cited semantic query) no longer applies.
 **Goal**: Build the two separate grounding surfaces the drafter relies on — a transactional Selless MCP for scoped lookup-by-ID reads and a Knowledge MCP serving cited semantic search over an ingested, conflict-aware RAG store — so the orchestrator never reads source systems directly.
 **Mode:** mvp
 **Depends on**: Phase 1 (survey gates KB ingest), Phase 2 (foundation)
@@ -81,9 +82,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: REP-01, REP-02, REP-03, REP-04, SAFE-03, SAFE-04
 **Success Criteria** (what must be TRUE):
   1. An incoming ticket is re-classified into the correct support category with a confidence signal, and the order ref / customer / issue type are extracted
-  2. The orchestrator produces a draft grounded in retrieved order data + KB content with citations, making no ungrounded claims, and runs a self-critique pass scoring it against the quality rubric before any send
-  3. High-risk tickets (money/refund, legal/complaints, complex/ambiguous) are auto-routed to a human — any high-risk signal escalates the whole ticket — rather than auto-answered
-  4. An output guard blocks **unauthorized** commitments — offers OUTSIDE an approved template or BEYOND the policy threshold for the verified order's eligibility — while permitting authorized **templated** offers within policy (REVISED 2026-06-03; the original "block ALL commitment language regardless of category" was found to conflict with the real CS workflow, which resolves the highest-volume flows with policy-bounded templated refund/discount/replacement offers); and email body content is treated as data (delimited, injection-screened) not instructions
+  2. The orchestrator produces a draft grounded in **Selless order data + the selected template** (Workflow/CODE-MAP) — *(D-29/D-30 2026-06-04: mandatory inline citations and the self-critique-before-send hard gate are RETIRED; the pipeline always drafts)*
+  3. ~~High-risk tickets are auto-routed to a human — any high-risk signal escalates~~ → *(D-30: ADVISORY/optional, non-blocking; always-draft. ⚠️ revisit money/legal before live send)*
+  4. ~~An output guard blocks unauthorized commitments (out-of-template / over-threshold)~~ → *(SUPERSEDED by D-30, 2026-06-04: the hard `pre_send_guard` block is REMOVED — offers are filled per the chosen template, no block).* Email body is still treated as untrusted data (delimited, **injection-screened — retained, D-14**).
 **Plans**: 12 plans (10 waves; baseline 04-00..04-05 executed/verified in waves 1-6; REOPEN 2026-06-03 adds 04-06..04-11 in waves 7-10 for the D-26/D-27 authorized-offer guard rework — template/threshold/eligibility-aware; RE-PLANNED for the Claude Code agent-team architecture — docs/specs/2026-06-02-cs-agent-team-design.md; superseded PydanticAI plans archived in _superseded/; vertical MVP slices over a Wave-0 bootstrap; deterministic safety hooks built before the agent team that composes them)
 - [x] 04-00-PLAN.md — Wave 0 bootstrap: extend src/config.py (Haiku/Sonnet classify/draft/lead models + DRY_RUN, secret-redacted, env-driven for Bedrock) + src/reply_mcp submit_reply chokepoint + .claude/settings.json (register 3 MCPs + bind ALL 5 hooks per design §4a) + .claude/CLAUDE.md team-safety contract + root CLAUDE.md orchestration row + fixtures + RED stubs + settings-hook-binding structural test (Wave 1)
 - [x] 04-01-PLAN.md — Five deterministic hooks (no LLM, mirror loop_guard (bool,reason)): injection_screen + pre_send_guard commitment block (SAFE-04/D-13/D-14) + escalation_gate any-signal-escalates (SAFE-03/D-08/D-09) + grounding_check (REP-03/D-11) + pii_redact (D-04); fail-closed (Wave 2)
@@ -100,6 +101,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **UI hint**: no
 
 ### Phase 5: Offline Evaluation Harness (THE GATE)
+> **PIVOT (D-30, 2026-06-04):** the gate is **rescoped from hard-blocking to ADVISORY**. It no longer gates on "0 UNAUTHORIZED commitments / 100% high-risk escalation" (D-21/D-27 retired). It **scores template-selection correctness + reply quality** (faithfulness/correctness/tone) vs the reference replies and reports them; go-live is informed, not hard-blocked, by these scores. Criterion #3 below is superseded accordingly.
 **Goal**: Make answer quality measurable and binding — replay a golden dataset of historical tickets through the same production pipeline code, score faithfulness/correctness/tone (not similarity to flawed past replies), and define the numeric quality bar that gates go-live.
 **Mode:** mvp
 **Depends on**: Phase 4
