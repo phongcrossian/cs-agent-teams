@@ -1,44 +1,41 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-03T09:33:51.144Z",
-  "phase": "4",
-  "phase_name": "Reply Pipeline + Safety Guards (REOPENING for authorized-offer guard)",
+  "timestamp": "2026-06-04T09:20:07.103Z",
+  "phase": "04",
+  "phase_name": "reply-pipeline-classify-extract-ground-draft-safety-guards",
   "phase_dir": ".planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
+  "work_item": "Live-test harness debug/fix: scripts/test_tickets_run.py — run 30 real Freshdesk tickets through the cs-agent-team draft workflow, compare AI vs CS, fix template selection + grounding, iterate until clean. (Phase-4 local-PoC acceptance exercise; NOT the PLAN.md execution.)",
   "completed_tasks": [
-    {"id": 1, "name": "Phase 5 discuss-phase: 05-CONTEXT.md + DISCUSSION-LOG (incl. D-25..D-28 authorized-offer guard)", "status": "done", "commit": "f7dd671"},
-    {"id": 2, "name": "Live-verified agent team has NO property-update capability; reply_mcp = submit_reply only", "status": "done"},
-    {"id": 3, "name": "Live-verified ticket 7732073 reply == template B7 verbatim (50% refund + 40% discount = correct templated flow)", "status": "done"},
-    {"id": 4, "name": "Decision: reopen Phase 4 to make commitment guard template + threshold aware", "status": "done"}
+    {"id": 1, "name": "Diagnose template-wrong root cause (category-glob load + free LLM pick -> Custom-/cross-family codes e.g. F8 for Change_Product_Variant)", "status": "done"},
+    {"id": 2, "name": "Deterministic _SUBTYPE_TEMPLATES map (sub-type -> allowed codes + snapshot files) from CODE-MAP-templates.md; constrain LLM to one real code; validate+flag", "status": "done", "commit": "572d361"},
+    {"id": 3, "name": "Grounding discipline in drafter prompt: no-assert-action, conservative-on-missing-data, no-order->verify (D-34), fit-complaint->B-codes; xlsx checker block", "status": "done", "commit": "572d361"},
+    {"id": 4, "name": "3 iterations of re-run + 3 checker agents (per category) comparing AI vs CS: errors 11->7->4, ok 5->13, 30/30 valid template family", "status": "done"},
+    {"id": 5, "name": "Fix Selless 'no order data': root cause was wrong host (.dev->.com) + must resolve by ORDER CODE via /po/search->/po/{id} (ticket-do returns empty). Live grounding now returns po.status + per-DO status (TA/TO/DELIVERED) + tracking + variant", "status": "done", "commit": "30dfc23"}
   ],
   "remaining_tasks": [
-    {"id": 5, "name": "Reopen Phase 4: ROADMAP [x]->[ ], revise success-criterion #4, set STATE phase=4", "status": "not_started"},
-    {"id": 6, "name": "Re-run scripts/fetch_golden_replies.py over BOTH export CSVs (uv was not on PATH in bg shell -> use .venv/bin/python)", "status": "not_started"},
-    {"id": 7, "name": "Analyze all ~63 tickets: join CS-agent properties + first public reply -> template (A/B/C code) + offer (refund%/discount%/replacement) + eligibility signals", "status": "not_started"},
-    {"id": 8, "name": "Derive authorized-offer rule set (case taxonomy -> template -> offer/threshold -> draft-vs-escalate) and write to Phase 4 dir", "status": "not_started"},
-    {"id": 9, "name": "Replan Phase 4 (pre_send_guard template/threshold-aware + drafter template selection); redefine Phase-5 gate per D-27", "status": "not_started"}
+    {"id": 6, "name": "Let iter-4 finish (background task bstsjftm2 — re-run all 30 WITH live Selless grounding; selless=Y now)", "status": "in_progress"},
+    {"id": 7, "name": "Re-run the 3 checker agents on iter-4 output; measure error reduction with REAL order grounding (expect delivery-status G4-vs-G9 + no-order + amount errors to drop)", "status": "not_started"},
+    {"id": 8, "name": "Merge findings -> rebuild test-tickets.xlsx", "status": "not_started"},
+    {"id": 9, "name": "Decide on deterministic guard (strip assert-language + amounts, cap offer per template) for template-inherent-assertion residuals e.g. 7731646 G12", "status": "not_started"},
+    {"id": 10, "name": "Final report of AI-vs-CS quality + reconcile src/config.py default to .com (see blocker)", "status": "not_started"}
   ],
   "blockers": [
-    {"description": "Background fetch failed: `uv` not found on PATH in the background bash shell", "type": "technical", "workaround": "Run with /Users/admin/work/phong/grok-agent-teams/.venv/bin/python scripts/fetch_golden_replies.py <csv>. Output goes to /tmp/cs_golden_analysis.jsonl (ephemeral - re-run on resume)."},
-    {"description": "GSD has no native 'phase reopen' command (only add/insert/remove/complete/edit)", "type": "technical", "workaround": "Reopen by editing ROADMAP.md checkbox + progress row + STATE.md by hand, OR insert phase 4.1 (INSERTED). User asked to reopen Phase 4 literally."}
+    {"description": "src/config.py:123 selless_api_base_url STILL defaults to https://api.selless.dev/... (empty data). The runner was hard-fixed to .com, but the Selless MCP (src/selless_mcp via settings) + client.py docstring still point to .dev — the real agent-team grounding would also get empty data until config is reconciled to api.selless.com.", "type": "technical", "workaround": "runner uses its own _SELLESS_BASE=.com; reconcile config.py default before the MCP path is used live"}
   ],
-  "human_actions_pending": [
-    {"action": "Confirm reopen-Phase-4 vs insert-4.1 if hand-editing ROADMAP feels wrong", "context": "Phase 4 is marked complete+verified+secured; its success criterion #4 (block ALL commitment language) is the thing being revised", "blocking": false}
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {"decision": "Reply scoring is reference-aware but NOT binding similarity to past replies", "rationale": "ROADMAP goal; past replies can be wrong", "phase": "5"},
-    {"decision": "Two-track eval: (A) classification vs CS-agent properties, (B) first public reply quality", "rationale": "mirrors real CS workflow read->lookup->fill properties->reply", "phase": "5"},
-    {"decision": "Make commitment guard template + threshold aware (D-26); redefine hard gate to '0 UNAUTHORIZED commitments' (D-27)", "rationale": "real correct flow USES templated refund/discount/replacement offers (template B7); block-all would escalate the entire complaint/cancellation/shipping volume", "phase": "4"}
+    {"decision": "Template selection = deterministic sub-type -> allowed-code shortlist; LLM picks one REAL code (reject Custom-)", "rationale": "User-chosen (over LLM-free-pick / load-all). Fixes wrong-family + invented template names.", "phase": "04"},
+    {"decision": "Selless grounding resolves by human ORDER CODE via /po/search -> /po/{id} on api.selless.COM", "rationale": "ticket-do mapping returns empty do_ids; orders DO exist on .com by order code. Earlier 'data provenance mismatch' conclusion was WRONG.", "phase": "04"},
+    {"decision": "Drafter never asserts an executed mutation / dollar amount; conservative branch when order state unknown; no-order -> verify/clarify", "rationale": "Matches RD-Q1 + D-34; reduced AI-vs-CS errors 11->4 before live grounding.", "phase": "04"}
   ],
-  "uncommitted_files": [
-    "scripts/fetch_golden_replies.py (new helper, not yet committed)",
-    ".env.prd (UNTRACKED - contains Freshdesk API key + DB creds; DO NOT COMMIT)",
-    ".planning/phases/01-.../snapshots/60000264798_tickets-*.csv and 60000264802_tickets-*.csv (UNTRACKED - customer PII; DO NOT COMMIT)",
-    "agent-platform.md (untracked, unrelated)"
+  "uncommitted_files": ["test-tickets.xlsx (regenerated each run)", ".test-tickets-data.jsonl (data, gitignored)", ".cs-compare/ (checker inputs+findings, untracked)"],
+  "background_processes": [
+    {"id": "bstsjftm2", "what": "iter-4 drafter: python -m scripts.test_tickets_run draft for all 3 categories WITH live Selless grounding", "note": "~10 min; writes .test-tickets-data.jsonl; was at 1/30 when paused (selless=Y confirmed)"}
   ],
-  "next_action": "Reopen Phase 4 in ROADMAP.md + STATE.md, then re-run scripts/fetch_golden_replies.py with .venv/bin/python over both export CSVs to get the first public replies.",
-  "context_notes": "Mid-investigation triggered by Phase-5 discuss. Pivotal finding: the business's correct CS flow resolves the highest-volume category (product complaint) with policy-bounded templated offers (refund/discount/replacement), so Phase-4 D-13 (block-all commitment) is too blunt and would escalate everything. Reopening Phase 4 to make the guard template+threshold aware, using the 2 real Freshdesk exports (~63 complaint/return tickets) to derive the rules. Phase-1 templates (A1-A9, B1-B13, C1) + POLICY-THRESHOLD-INDEX (THR-05/06/07/08, warranty THR-03/04) are authoritative. Gate redefinition captured in 05-CONTEXT.md D-25..D-28."
+  "next_action": "Check background task bstsjftm2 output; when ALL DONE iter4, rebuild .cs-compare inputs + re-run the 3 checker agents (general-purpose) per category, then merge findings + rebuild xlsx and report the error delta vs iter-3 (4/13/13).",
+  "context_notes": "The drafter calls the `claude` CLI as a subprocess per ticket (claude --print --output-format json). Runner stages: collect -> draft -> xlsx. Data: .test-tickets-data.jsonl (30 recs). Checker = 3 general-purpose agents reading .cs-compare/<cat>.json + CODE-MAP-templates.md, writing <cat>-findings.json. Severity merged into rec['checker'] and rendered as the xlsx Checker block. Classification (Customer_Request) already matches CS 30/30; the work is all about template choice + offer/assert grounding."
 }
