@@ -153,6 +153,77 @@ THRESHOLD_CAPS: dict[str, dict] = {
 }
 
 # ---------------------------------------------------------------------------
+# SUBTYPE_ALLOWED_OFFER_KEYS
+# Mapping: sub_type -> frozenset of offer-dimension keys that are LEGAL for that flow.
+#
+# Grounded in 04-AUTHORIZED-OFFER-RULES.md §2 and POLICY-THRESHOLD-INDEX.md:
+#   Return           — refund (THR-07) + discount (THR-05)        §2A COMPLAINT
+#   Partial_Refund   — refund (THR-07) + discount (THR-05)        §2A COMPLAINT
+#   Full_Refund      — refund only (THR-07, evidence-gated)       §2A COMPLAINT §2A Q4
+#   Replace          — no monetary pct offer; replacement is in-kind (A/B/G codes)
+#   Cancel_Order     — retention_pct (THR-06 ≤20%) only           §2B CHANGE_REQUEST
+#   Change_Shipping_Address  — no monetary pct dimension           §2B CHANGE_REQUEST
+#   Change_Product_Variant   — no monetary pct dimension           §2B CHANGE_REQUEST
+#   Change_Non_Shipping_Address / Express_Line — no monetary pct  §2B CHANGE_REQUEST
+#   Ask_About_Delivery_Status — comp_pct (THR-08 ≤50%) for late-ship compensation §2C INQUIRY
+#   Ask_About_Order/Policy/Product/Promotion — purely informational, no offer keys  §2C INQUIRY
+#
+# Fail-closed default: sub-types NOT listed here get frozenset() — any offered key is rejected.
+# CR-02 fix: replaces global cap-only check with per-sub-type allowed-key gate.
+# WR-01 fix: any key NOT in allowed set (including typos like "refundpct") is rejected.
+# ---------------------------------------------------------------------------
+
+SUBTYPE_ALLOWED_OFFER_KEYS: dict[str, frozenset[str]] = {
+    # §2A COMPLAINT — Return: refund (THR-07) + discount (THR-05)
+    # RULES §2A: "Offer alternatives BEFORE return: replacement OR 50% refund (THR-07),
+    #             + 40% VIP discount + free shipping (THR-05)"
+    "Return": frozenset({"refund_pct", "discount_pct"}),
+
+    # §2A COMPLAINT — Replace: in-kind replacement, no monetary pct offer
+    # RULES §2A: "Free replacement, keep original, request fit measurements"
+    "Replace": frozenset(),
+
+    # §2A COMPLAINT — Partial_Refund: refund (THR-07) + discount (THR-05)
+    # RULES §2A: "50% refund (THR-07) + 40% discount (THR-05)"
+    "Partial_Refund": frozenset({"refund_pct", "discount_pct"}),
+
+    # §2A COMPLAINT — Full_Refund: refund only (THR-07); evidence-gated (RD-Q3)
+    # RULES §2A §2A Q4: "Full refund per flow when variant unavailable / cannot replace"
+    "Full_Refund": frozenset({"refund_pct"}),
+
+    # §2A COMPLAINT — Review: always force-escalated (no flow); listed for completeness
+    # RULES §2A Q2: "no dedicated template code found — named gap"
+    "Review": frozenset(),
+
+    # §2B CHANGE_REQUEST — Cancel_Order: retention_pct only (THR-06 ≤20%)
+    # RULES §2B: "≤20% retention offer first (THR-06/16)"
+    "Cancel_Order": frozenset({"retention_pct"}),
+
+    # §2B CHANGE_REQUEST — Change_Shipping_Address: no monetary offer dimension
+    # RULES §2B: "confirm address update; not yet shipped; valid address"
+    "Change_Shipping_Address": frozenset(),
+
+    # §2B CHANGE_REQUEST — Change_Product_Variant: no monetary offer dimension
+    # RULES §2B: "variant swap + ask measurements; variant in stock"
+    "Change_Product_Variant": frozenset(),
+
+    # §2B CHANGE_REQUEST — Change_Non_Shipping_Address / Express_Line: no monetary offer
+    # RULES §2B: "address/line edit; order state gate"
+    "Change_Non_Shipping_Address": frozenset(),
+    "Express_Line": frozenset(),
+
+    # §2C INQUIRY — Ask_About_Delivery_Status (WISMO): comp_pct for late-ship compensation
+    # RULES §2C: "if late (THR-09 >21d / THR-10 >35d) may offer compensation (THR-08 ≤50%)"
+    "Ask_About_Delivery_Status": frozenset({"comp_pct"}),
+
+    # §2C INQUIRY — purely informational sub-types: no monetary offer dimension
+    "Ask_About_Order":     frozenset(),
+    "Ask_About_Policy":    frozenset(),
+    "Ask_About_Product":   frozenset(),
+    "Ask_About_Promotion": frozenset(),
+}
+
+# ---------------------------------------------------------------------------
 # FORCE_ESCALATE_SUBTYPES
 # Sub-types that ALWAYS escalate — no template-based offer exists.
 # "Review" = RULES §2A gap confirmed (Q2: no dedicated template, CS team to define flow).
@@ -270,12 +341,42 @@ def authorize_offer(
     if template_code is None or template_code not in approved_templates:
         return False, "unauthorized:out_of_template"
 
-    # (d) Each offered percentage must be ≤ its threshold cap
-    for pct_key, entry in THRESHOLD_CAPS.items():
-        offered_val = offered.get(pct_key)
-        if offered_val is not None:
-            if offered_val > entry["cap"]:
-                return False, f"unauthorized:over_threshold:{entry['thr_id']}"
+    # (d) Per-sub-type allowed-offer-key gate + value validation + threshold cap.
+    #
+    # CR-02 fix: each offered key is first checked against SUBTYPE_ALLOWED_OFFER_KEYS
+    # for this sub_type. An out-of-flow key (e.g. refund_pct on Cancel_Order) is
+    # rejected even if it is within the global threshold cap, because threshold caps
+    # are global while offer dimensions are per-flow. fail-closed: sub-types not in
+    # the map default to frozenset() (any key rejected).
+    #
+    # WR-01 fix: unknown/mistyped keys (not in SUBTYPE_ALLOWED_OFFER_KEYS AND not in
+    # THRESHOLD_CAPS) are also caught here — any key not in the allowed set is rejected.
+    #
+    # WR-02/WR-03 fix: value type and range are validated inside authorize_offer so the
+    # function never raises on caller-supplied data (bool, str, negative → reject).
+    allowed_offer_keys = SUBTYPE_ALLOWED_OFFER_KEYS.get(sub_type, frozenset())
+    for offered_key, offered_val in offered.items():
+        # CR-02 / WR-01: reject any key not in the allowed set for this sub_type.
+        # This catches both out-of-flow legitimate keys (e.g. refund_pct on Cancel_Order)
+        # and unknown/mistyped keys (e.g. "refundpct") in a single gate.
+        if offered_key not in allowed_offer_keys:
+            return False, f"unauthorized:offer_key_not_allowed:{offered_key}"
+
+        # WR-02 / WR-03: validate value type and range before any comparison.
+        # bool is a subclass of int in Python — must be rejected before int check.
+        # str values would raise TypeError on ">"; negative values are nonsensical.
+        # The function must always return (bool, str), never raise.
+        if isinstance(offered_val, bool):
+            return False, f"unauthorized:invalid_offer_value:{offered_key}"
+        if not isinstance(offered_val, (int, float)):
+            return False, f"unauthorized:invalid_offer_value:{offered_key}"
+        if offered_val < 0:
+            return False, f"unauthorized:invalid_offer_value:{offered_key}"
+
+        # Threshold cap check (only for recognized cap keys).
+        cap_entry = THRESHOLD_CAPS.get(offered_key)
+        if cap_entry is not None and offered_val > cap_entry["cap"]:
+            return False, f"unauthorized:over_threshold:{cap_entry['thr_id']}"
 
     # (e) Warranty eligibility gate
     # STUB (RD-Q2): real eligibility comes from Selless MCP in plan 04-11.
