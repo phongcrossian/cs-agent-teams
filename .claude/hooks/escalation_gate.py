@@ -115,26 +115,40 @@ def _derive_signals(payload: dict) -> dict:
       'risk_signals', 'escalation_signals', or 'signals'.
 
     Falls back to scanning top-level bool fields matching signal names.
+
+    CR-01 fix: _derive_operational_action ALWAYS runs, regardless of how signals
+    was sourced. An explicit signals dict is copied (never mutated in place) so
+    that a payload carrying both signals={all-False} and customer_request="Review"
+    correctly sets operational_action=True before the dict is returned/persisted.
     """
-    # Explicit signals dict (either context)
+    signals: dict | None = None
+
+    # Explicit signals dict (either context) — copy; do NOT mutate caller's dict (CR-01)
     for key in ("signals", "risk_signals", "escalation_signals"):
         if isinstance(payload.get(key), dict):
-            return payload[key]
+            signals = dict(payload[key])
+            break
 
     # Stage result context: signals embedded in tool_result / result
-    for key in ("tool_result", "result", "output"):
-        nested = payload.get(key)
-        if isinstance(nested, dict):
-            for sig_key in ("signals", "risk_signals", "escalation_signals"):
-                if isinstance(nested.get(sig_key), dict):
-                    return nested[sig_key]
+    if signals is None:
+        for key in ("tool_result", "result", "output"):
+            nested = payload.get(key)
+            if isinstance(nested, dict):
+                for sig_key in ("signals", "risk_signals", "escalation_signals"):
+                    if isinstance(nested.get(sig_key), dict):
+                        signals = dict(nested[sig_key])
+                        break
+            if signals is not None:
+                break
 
     # Final fallback: scan top-level for known signal keys
-    known_keys = {k for k, _ in _SIGNAL_ORDER}
-    signals = {k: bool(payload.get(k, False)) for k in known_keys if k in payload}
+    if signals is None:
+        known_keys = {k for k, _ in _SIGNAL_ORDER}
+        signals = {k: bool(payload.get(k, False)) for k in known_keys if k in payload}
 
-    # Derive operational_action from stage-result fields not represented by bool signals.
-    # Sources checked at top-level and under tool_result/result/output (same nesting logic above).
+    # CR-01: ALWAYS derive operational_action — regardless of how signals was sourced.
+    # Closes the bypass: signals={all-False} + customer_request="Review" now correctly
+    # sets operational_action=True and persists it to the state file.
     _derive_operational_action(payload, signals)
 
     return signals
@@ -145,44 +159,59 @@ def _derive_operational_action(payload: dict, signals: dict) -> None:
 
     Mutates *signals* in place. Rules (D-08 additive — existing True is never cleared):
 
-    1. customer_request ∈ {"Review", "Full_Refund"}:
+    1. customer_request ∈ {"Review", "Full_Refund"} in ANY payload source:
        - Review: no dedicated template/flow yet (§2A, Q2) → always escalate.
        - Full_Refund: evidence-gated; escalate so human verifies flow/evidence (§2A, Q4 stricter checks).
 
-    2. asserts_mutation is truthy (any stage explicitly flags a completed-action claim):
+    2. asserts_mutation is truthy in ANY source (any stage explicitly flags a completed-action claim):
        → escalate (RD-Q1 — draft claims an action the AI did not cause).
 
-    3. customer_request ∈ _MUTATION_ASSERTING_SUBTYPES AND asserts_mutation is not explicitly False:
+    3. customer_request ∈ _MUTATION_ASSERTING_SUBTYPES in ANY source AND no source explicitly sets
+       asserts_mutation=False:
        → escalate (§1 execution boundary — §2B AUTO* after mutation per §1, else ESCALATE).
-       Rationale: if the upstream stage does not explicitly set asserts_mutation=False, the safe
-       default is to treat the draft as potentially asserting a completed mutation (fail-closed).
+       Rationale: if no upstream stage explicitly sets asserts_mutation=False, the safe default is
+       to treat the draft as potentially asserting a completed mutation (fail-closed).
+
+    WR-04 fix: ALL sources are scanned before any verdict is made (any-source-escalates, not
+    first-source-wins). A benign top-level customer_request can no longer mask an escalating
+    nested one. Escalation is triggered if ANY source yields an escalating value.
     """
     # If the signal is already True (from an explicit signals dict), keep it.
     if signals.get("operational_action"):
         return
 
-    # Extract relevant fields from all nesting levels.
-    customer_request: str | None = None
-    asserts_mutation: object = None  # use sentinel None = "not present"
+    # WR-04: collect from ALL sources before evaluating any rule.
+    # any-source-escalates: if ANY source has an escalating value, we escalate.
+    all_customer_requests: list[str] = []
+    any_asserts_mutation_true: bool = False
+    any_asserts_mutation_explicit_false: bool = False
 
     for src in _iter_payload_sources(payload):
-        if customer_request is None:
-            customer_request = src.get("customer_request")
-        if asserts_mutation is None and "asserts_mutation" in src:
-            asserts_mutation = src["asserts_mutation"]
+        cr = src.get("customer_request")
+        if cr is not None:
+            all_customer_requests.append(cr)
+        if "asserts_mutation" in src:
+            if src["asserts_mutation"]:
+                any_asserts_mutation_true = True
+            else:
+                any_asserts_mutation_explicit_false = True
 
-    # Rule 1: Review or Full_Refund → escalate.
-    if customer_request in ("Review", "Full_Refund"):
+    # Rule 1: ANY source has customer_request ∈ {"Review", "Full_Refund"} → escalate.
+    if any(cr in ("Review", "Full_Refund") for cr in all_customer_requests):
         signals["operational_action"] = True
         return
 
-    # Rule 2: explicit asserts_mutation=True flag from any stage.
-    if asserts_mutation:
+    # Rule 2: ANY source explicitly sets asserts_mutation=True → escalate (RD-Q1).
+    if any_asserts_mutation_true:
         signals["operational_action"] = True
         return
 
-    # Rule 3: mutation-asserting change_request sub-type AND asserts_mutation not False.
-    if customer_request in _MUTATION_ASSERTING_SUBTYPES and asserts_mutation is not False:
+    # Rule 3: ANY source sets a mutation-asserting sub-type AND no source explicitly
+    # sets asserts_mutation=False → escalate (fail-closed §1 boundary).
+    if (
+        any(cr in _MUTATION_ASSERTING_SUBTYPES for cr in all_customer_requests)
+        and not any_asserts_mutation_explicit_false
+    ):
         signals["operational_action"] = True
         return
 
