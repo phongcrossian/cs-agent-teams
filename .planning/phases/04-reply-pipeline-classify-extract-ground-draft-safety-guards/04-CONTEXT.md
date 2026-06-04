@@ -1,8 +1,58 @@
 # Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards - Context
 
-**Gathered:** 2026-06-02 · **Re-homed:** 2026-06-03 (architecture pivot — see below)
-**Status:** Ready for planning
-**Canonical design:** `docs/specs/2026-06-02-cs-agent-team-design.md` (APPROVED — planner MUST read)
+**Gathered:** 2026-06-02 · **Re-homed:** 2026-06-03 (architecture pivot) · **Updated:** 2026-06-04 (PoC pivot D-29/D-30 — see top section)
+**Status:** Ready for planning (RE-OPEN for code rework — see PIVOT below)
+**Canonical design:** `docs/specs/2026-06-02-cs-agent-team-design.md` (APPROVED — planner MUST read, but read through the D-29/D-30 delta)
+
+> ## ⚠️ PIVOT 2026-06-04 (D-29 / D-30) — always-draft PoC; RAG + hard guard/escalation RETIRED
+>
+> After a 30-ticket live test the RAG-grounded, fail-closed pipeline could not draft (empty KB, no Voyage
+> key) and escalated everything. User-confirmed direction change (commit 070509a). **This pivot edited only
+> docs (PROJECT/ROADMAP/REQUIREMENTS/CLAUDE.md); the Phase-4 CODE still implements the old fail-closed guard
+> architecture.** This CONTEXT update captures the decisions for the **follow-on code rework** that aligns
+> the `cs-agent-team` implementation with the pivot.
+>
+> **Locked by the pivot (do NOT re-decide):**
+> - **D-29 — Template/Selless grounding, no RAG.** Reply grounding = local **Template library + Workflow/
+>   CODE-MAP**, filled with **Selless (prod)** order data. No semantic RAG, no Voyage embeddings, no mandatory
+>   `[KB-N]`/`[SEL-N]` citations.
+> - **D-30 — Always-draft PoC.** Pipeline always produces a customer draft. **RETIRED:** D-08 (any-signal
+>   escalate), D-10 (escalate=no-draft), D-11 (mandatory citations), **D-26/D-27** (authorized-offer guard +
+>   zero-UNAUTHORIZED gate). Offers filled per template, not blocked/stripped.
+> - **Safety floor kept:** D-14 (injection screening), D-04 (PII redaction), D-03 (model split, no Opus hot
+>   path), Phase-6 kill-switch. **DRY_RUN only** — ⚠️ revisit the removed guard before any live (non-DRY_RUN) send.
+>
+> **The `<reopen_decisions>` block below (D-26/D-27 authorized-offer guard) is SUPERSEDED by D-30** — kept
+> for historical context only; do NOT plan against it.
+
+<pivot_decisions>
+## PIVOT CODE-REWORK DECISIONS (2026-06-04) — D-31..D-34
+
+> These four implementation decisions were captured in this discussion. They tell the planner HOW to land the
+> D-29/D-30 pivot in the Phase-4 code. They sit ON TOP of D-29/D-30 (which are locked policy, not re-decided).
+
+- **D-31 (locked) — Retire Knowledge MCP → local file-store.** Remove the Knowledge MCP from the runtime
+  grounding path. The drafter reads the **26 local template snapshots** + the **Workflow/CODE-MAP** directly
+  from files (matches the prototyped file-based draft mode). No `semantic_search`, no pgvector/Voyage. The
+  Knowledge MCP server code may be archived but is **not wired** into the team. (Selless MCP STAYS.)
+- **D-32 (locked) — DELETE the retired guard hooks.** Remove `pre_send_guard.py`, `escalation_gate.py`,
+  `grounding_check.py`, and `authorized_offer.py` entirely (code + their `settings.json` PreToolUse wiring).
+  **Keep `injection_screen.py` (D-14) and `pii_redact.py` (D-04) active** — that is the remaining safety
+  floor. ⚠️ Trade-off accepted: the before-live "revisit guard" task must re-author a guard from scratch
+  (the pivot docs retain the strike-through D-26 spec as the reference for that future work).
+- **D-33 (locked) — Always `action=draft` + optional advisory hint.** The verdict is always
+  `{action: "draft", body, ...}`. There is no `escalate=no-draft` outcome. An **optional advisory field**
+  (e.g. `escalation_hint` for money/legal/injection signals) MAY be attached for downstream human triage,
+  but it never suppresses the draft. (Mirrors the "Escalation Semantics Reference (advisory)" in
+  `.claude/CLAUDE.md`.)
+- **D-34 (locked) — Flow-aware Selless fallback (NOT blind placeholders).** When Selless returns no order
+  data, the drafter MUST consult the **Workflow/CODE-MAP** to choose the correct flow rather than fabricate
+  numbers. A missing order is a **signal** (customer hasn't purchased yet / wrong order code) → draft the
+  appropriate template (e.g. verify-order / clarify-order-info). Placeholder tokens (e.g. `[TRACKING_LINK]`,
+  `[ETA]`) are allowed ONLY for infrastructure fields when the flow has established the order is VALID but a
+  detail is pending. Never invent order facts.
+
+</pivot_decisions>
 
 > **ARCHITECTURE PIVOT (2026-06-03).** Phase 4 is now built as a **standard Claude Code agent team**
 > (`.claude/` with `agents/`, `skills/`, `hooks/`, `CLAUDE.md`, MCP wiring) running **locally first**
@@ -93,7 +143,12 @@ SAFE-03, SAFE-04**.
 </decisions>
 
 <reopen_decisions>
-## REOPEN (2026-06-03) — Authorized-Offer Guard (D-26/D-27, supersedes block-all D-13)
+## ~~REOPEN (2026-06-03) — Authorized-Offer Guard (D-26/D-27, supersedes block-all D-13)~~ — SUPERSEDED by D-30 (2026-06-04)
+
+> ⚠️ **SUPERSEDED by the D-29/D-30 pivot (see top).** The authorized-offer guard (D-26/D-27) is RETIRED:
+> the always-draft PoC does not block offers and the Phase-5 gate is advisory (not "0 UNAUTHORIZED"). This
+> entire block is retained as the **reference spec for the future before-live guard re-authoring** (D-32),
+> NOT as a plannable decision for the current rework. Do not plan against it.
 
 > **Why reopened.** The original D-13/SAFE-04 made `pre_send_guard.py` block ALL refund/credit/replace/charge
 > language → escalate. A live Freshdesk fetch (312 real tickets) proved the *correct* CS flow resolves the
@@ -159,9 +214,17 @@ failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold
 <canonical_refs>
 ## Canonical References — downstream agents MUST read
 
-### This phase's design (READ FIRST)
+### Pivot sources (READ FIRST — override everything below where they conflict)
+- `CLAUDE.md` (root) — PIVOT 2026-06-04 banner + stack deltas (Voyage/pgvector-as-RAG/Ragas dropped)
+- `.claude/CLAUDE.md` — agent safety contract, D-29/D-30 banner, retired-rule strike-throughs, the surviving
+  safety floor (D-14 injection + D-04 PII + D-03 models + kill-switch) and the advisory escalation payload
+- Commit `070509a` — the exact pivot diff (docs-only; code rework pending = this phase's work)
+- `.planning/phases/01-knowledge-survey-conflict-inventory/CODE-MAP-templates.md` + the 26 template snapshots
+  in `.../01-knowledge-survey-conflict-inventory/snapshots/*.md` — the local file-store grounding surface (D-31)
+
+### This phase's design (READ THROUGH THE D-29/D-30 DELTA)
 - `docs/specs/2026-06-02-cs-agent-team-design.md` — the approved agent-team architecture, `.claude/`
-  layout, safety model, provider plan, local PoC acceptance
+  layout, safety model, provider plan, local PoC acceptance (the RAG/guard/escalation parts are superseded)
 
 ### Project-level (locked)
 - `.planning/PROJECT.md` — "answers customers only", two-MCP architecture, "nothing ships until eval bar",
@@ -197,6 +260,13 @@ failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold
 
 <code_context>
 ## Existing Code Insights
+
+> ⚠️ **Replan required.** The 12 existing Phase-4 plans (04-00..04-11) were built for the RAG-grounded,
+> fail-closed, authorized-offer-guard architecture. Under D-29/D-30 + D-31..D-34 they are **stale**. The
+> rework is a NEW plan set: delete 4 guard hooks (D-32), retire Knowledge MCP wiring → file-store (D-31),
+> make the verdict always-draft + advisory hint (D-33), make the drafter flow-aware on missing Selless data
+> (D-34), and strip `voyageai`/`pgvector` (RAG use) from `pyproject.toml`. Keep `injection_screen.py` +
+> `pii_redact.py`. Current `scripts/cs_team_demo.py` still emits escalate verdicts — it must be reworked too.
 
 ### Reusable assets
 - **Both MCP servers** (`src/knowledge_mcp/`, `src/selless_mcp/`) — cited, conflict/stale-aware, scoped,
@@ -235,6 +305,10 @@ failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold
 
 <deferred>
 ## Deferred Ideas
+- **⚠️ BEFORE-LIVE BLOCKER — re-author an output guard.** D-32 deletes the guard hooks for the DRY_RUN PoC.
+  Before any live (non-DRY_RUN) send at 23k/week, a guard MUST be re-authored (use the struck-through D-26
+  authorized-offer spec as the reference). Tracked here so it is not lost. DRY_RUN only until then.
+- Real Selless eligibility wiring (warranty dates, prior-remediation, variant stock) — was deferred as 04-11.
 - Live Freshdesk webhook/queue intake + posting (reuse Phase-2 as an integration bridge).
 - `samx` platform plugin packaging (`team.yaml`/`pipeline.yaml`).
 - AWS Bedrock cut-over (env-driven; not exercised locally).

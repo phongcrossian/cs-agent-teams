@@ -179,3 +179,64 @@
 - LLM layer on top of the deterministic output guard
 - Per-category confidence thresholds (THRS-01, v2)
 - Multi-issue / multi-language ticket decomposition (complex tickets escalate for now; non-English out of scope)
+
+---
+---
+
+# SESSION 2 — 2026-06-04 — PoC pivot D-29/D-30 code-rework discussion
+
+**Date:** 2026-06-04
+**Trigger:** Update existing CONTEXT.md to align Phase-4 CODE with the D-29/D-30 PoC pivot (commit 070509a, docs-only). New decisions D-31..D-34.
+**Areas discussed:** Knowledge MCP fate, Retired hooks handling, Escalation semantics, Selless grounding fallback
+
+## Knowledge MCP fate (D-31)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Retire MCP → local file-store | Drafter reads 26 template snapshots + CODE-MAP from files | ✓ |
+| Keep thin keyed get_template MCP | Server with exact-key get_template/lookup_code only | |
+| MCP shell file-backed | Keep MCP interface, file-backed | |
+
+**User's choice:** Retire MCP → local file-store. Fewest moving parts; matches prototyped file-based draft mode. Selless MCP stays.
+
+## Retired hooks handling (D-32)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Keep but no-op/advisory | Neutralize (exit 0), keep files for easy revert | |
+| Delete entirely | Remove 4 guard hooks + settings.json wiring | ✓ |
+| Keep code, untoggle settings.json only | Leave code, remove from PreToolUse chain | |
+
+**User's choice:** Delete entirely (`pre_send_guard`, `escalation_gate`, `grounding_check`, `authorized_offer`). Keep `injection_screen` (D-14) + `pii_redact` (D-04). Trade-off: before-live guard re-authored from scratch (deferred BLOCKER).
+
+## Escalation semantics (D-33)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Always draft + advisory hint | action always = draft; optional escalation_hint for triage | ✓ |
+| Drop escalation entirely | Verdict only {action: draft, body} | |
+| Keep escalate=no-draft for injection | Always-draft except injection | |
+
+**User's choice:** Always draft + advisory hint. Mirrors advisory escalation reference in `.claude/CLAUDE.md`; hint never suppresses the draft.
+
+## Selless grounding fallback (D-34)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Placeholder token + flag ungrounded | Fill [TRACKING_LINK]/[ETA], mark grounded=false | (refined) |
+| Draft generic, no figures | Drop all order-data sentences | |
+| Skip grounding, draft full template | Treat data as valid (demo-stub) | |
+
+**User's choice (free-text refinement):** "Không có thông tin thì phải xem có đúng Flow không, có thể khách chưa mua hàng." → **Flow-aware fallback.** Missing order = a SIGNAL; consult Workflow/CODE-MAP and draft a verify-order/clarify template instead of fabricating numbers. Placeholder tokens only for infra fields once the flow establishes the order is VALID but a detail is pending. Confirmed in a follow-up question.
+
+## Claude's Discretion (session 2)
+
+- `pyproject.toml` removals (`voyageai`, `pgvector` as RAG, Ragas) — mechanical.
+- Verdict schema shape for the advisory hint field.
+- File-store read mechanism / CODE-MAP keying for the drafter.
+- Agent prompt / skill wording updates for always-draft.
+
+## Deferred Ideas (session 2)
+
+- ⚠️ BEFORE-LIVE BLOCKER: re-author an output guard before any non-DRY_RUN send (reference = struck-through D-26 spec).
+- Real Selless eligibility wiring (was 04-11).
