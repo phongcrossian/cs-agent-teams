@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 4 reopened (authorized-offer guard); deriving rules from real ticket samples
-last_updated: "2026-06-03T11:16:18.397Z"
+status: ready_to_plan
+stopped_at: Phase 04 complete (12/12) — ready to discuss Phase 05
+last_updated: 2026-06-04T02:36:05.351Z
 last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
   percent: 43
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
-**Current focus:** Phase 04 — reply-pipeline-classify-extract-ground-draft-safety-guards
+**Current focus:** Phase 05 — offline evaluation harness the gate
 
 ## Current Position
 
-Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
-Plan: 6 of 12
-Status: Ready to execute
-Last activity: 2026-06-03
+Phase: 05
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-04
 
 Progress: [██████████] 96%
 
@@ -36,7 +36,7 @@ Progress: [██████████] 96%
 
 **Velocity:**
 
-- Total plans completed: 21
+- Total plans completed: 33
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -47,7 +47,7 @@ Progress: [██████████] 96%
 | 01 | 4 | - | - |
 | 02 | 6 | - | - |
 | 03 | 5 | - | - |
-| 04 | 6 | - | - |
+| 04 | 12 | - | - |
 
 **Recent Trend:**
 
