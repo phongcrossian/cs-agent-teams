@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 4 context updated for D-29/D-30 pivot (D-31..D-34); code rework pending
-last_updated: "2026-06-04T05:01:49.195Z"
+status: ready_to_plan
+stopped_at: Phase 4 RE-OPENED for D-29/D-30 pivot (D-31..D-34); context updated, code rework needs new plan set
+last_updated: "2026-06-04T05:21:00.000Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 27
   completed_plans: 27
-  percent: 57
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
-**Current focus:** Phase 05 — offline evaluation harness the gate
+**Current focus:** Phase 04 — RE-OPENED for the D-29/D-30 PoC pivot (always-draft code rework)
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
+Phase: 04
+Plan: Not started (12 prior plans stale; new rework plan set needed — D-31..D-34)
 Status: Ready to plan
 Last activity: 2026-06-04
 
-Progress: [██████████] 96%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 

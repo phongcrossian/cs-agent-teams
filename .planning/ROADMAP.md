@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Knowledge Survey & Conflict Inventory** - Catalog every KB source, coverage by ticket type, and conflicts/staleness before any RAG is built
 - [x] **Phase 2: Freshdesk I/O Layer & Pipeline Backbone** - Isolated, rate-limit-aware Freshdesk client + queued intake with idempotent, loop-safe posting (completed 2026-06-01)
 - [x] **Phase 3: Grounding Layer (Selless MCP + Knowledge RAG MCP)** - Two separate scoped grounding surfaces: transactional reads + cited semantic search over the ingested KB (completed 2026-06-02)
-- [x] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards (first pass completed 2026-06-03; **REOPENED 2026-06-03** — commitment guard must become template/threshold-aware; success criterion #4 revised) (completed 2026-06-04)
+- [ ] **Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards** - End-to-end grounded draft with classification, self-critique, escalation rules, and output guards (first pass completed 2026-06-03; REOPENED 2026-06-03 for D-26/D-27 guard; **RE-OPENED AGAIN 2026-06-04 for the D-29/D-30 PoC pivot — always-draft code rework D-31..D-34: retire Knowledge MCP→file-store, DELETE guard hooks, always-draft+advisory verdict, flow-aware Selless fallback; 12 prior plans stale, new plan set needed**)
 - [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
 - [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
 - [ ] **Phase 7: Staged Rollout (5% → 100%)** - Controlled, quality-gated exposure scaling from 5% to full volume
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 12/12 | Complete   | 2026-06-04 |
+| 4. Reply Pipeline + Safety Guards | 12/12 (stale) | Reopened (D-29/D-30 rework) | - |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
