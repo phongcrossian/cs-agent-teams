@@ -511,23 +511,66 @@ def _parse_draft_json(raw_output: str) -> dict | None:
     return None
 
 
-async def fetch_selless_order(client: httpx.AsyncClient, fd_ticket_id: str) -> dict | None:
-    """Best-effort: FD ticket -> ticket-do mapping -> order detail. Returns {} keys or None.
+def _summarize_selless(po: dict, dos: list) -> dict:
+    """Compact, drafter-friendly grounding summary from /po/{id}.
 
-    Selless prod is network-gated (no key). Returns None if no DO mapping exists
-    (the case for these historical sample tickets) or on any error.
+    Surfaces the fields the template-branch decision needs: order status, DO
+    fulfillment status (TA/TO/delivered…) + status dates, tracking numbers, and
+    the ordered variant(s). Avoids dumping the full raw payload.
     """
+    out = {
+        "order_code": po.get("code"),
+        "po_status": po.get("status"),
+        "created": po.get("created"),
+        "amount": po.get("amount"),
+        "discount": po.get("discount"),
+        "shipping_city": (po.get("shipping_address") or {}).get("city"),
+        "shipping_state": (po.get("shipping_address") or {}).get("state"),
+        "deliveries": [],
+    }
+    for d in (dos or [])[:5]:
+        v = d.get("variant") or {}
+        props = {p.get("name"): p.get("value") for p in (v.get("properties") or [])}
+        out["deliveries"].append({
+            "do_status": d.get("status"),
+            "odo_status": d.get("odo_status"),
+            "product": v.get("title") or d.get("product_label"),
+            "variant": props,
+            "trackings": d.get("trackings") or [],
+            "date_processing": d.get("status_date_processing"),
+            "date_ta": d.get("status_date_ta"),
+            "date_delivered": d.get("status_date_delivered"),
+            "date_cancelled": d.get("status_date_cancelled"),
+        })
+    return out
+
+
+async def fetch_selless_order(client: httpx.AsyncClient, order_code: str) -> dict | None:
+    """Resolve the human order code (e.g. "25659-2952") to live order detail.
+
+    Path: GET /po/search?param=<code> -> internal id -> GET /po/{id}. Returns a
+    compact summary, or None when the order genuinely is not found (empty search
+    result = a real 'no order' signal the drafter should treat as verify/clarify).
+    """
+    order_code = (order_code or "").strip()
+    if len(order_code) < 3:
+        return None
     try:
-        r = await client.get(f"/{fd_ticket_id}/ticket-do")
-        if r.status_code != 200:
+        rs = await client.get("/po/search", params={"param": order_code, "skip": 0, "take": 1})
+        if rs.status_code != 200:
             return None
-        do_ids = (r.json() or {}).get("do_ids") or []
-        if not do_ids:
+        data = rs.json()
+        items = data if isinstance(data, list) else (data.get("items") or [])
+        if not items:
+            return None  # genuine no-order: order code not in Selless
+        oid = items[0].get("id")
+        if not oid:
             return None
-        first = do_ids[0]
-        oid = first.get("id") if isinstance(first, dict) else first
         ro = await client.get(f"/po/{oid}")
-        return ro.json() if ro.status_code == 200 else None
+        if ro.status_code != 200:
+            return None
+        body = ro.json() or {}
+        return _summarize_selless(body.get("po") or {}, body.get("dos") or [])
     except Exception:  # noqa: BLE001
         return None
 
@@ -550,7 +593,7 @@ async def run_drafter(rec: dict, templates: str, selless: dict | None = None,
     return parsed if parsed is not None else {"_error": "parse_error"}
 
 
-_SELLESS_BASE = "https://api.selless.dev/admin/csm/order/public/tickets"
+_SELLESS_BASE = "https://api.selless.com/admin/csm/order/public/tickets"
 
 
 async def draft(only_cat: str | None) -> None:
@@ -571,7 +614,7 @@ async def draft(only_cat: str | None) -> None:
             # cache key = sub-type (deterministic load); fall back to category
             ck = subtype or cat
             templates = tmpl_cache.setdefault(ck, _load_templates_for_subtype(subtype, cat))
-            selless = await fetch_selless_order(sclient, str(rec["ticket_id"]))
+            selless = await fetch_selless_order(sclient, rec.get("cs_props", {}).get("Order", ""))
             if selless:
                 n_selless += 1
             d = await run_drafter(rec, templates, selless, allowed)
