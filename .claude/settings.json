@@ -1,13 +1,5 @@
 {
   "mcpServers": {
-    "KnowledgeMCP": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "src.knowledge_mcp.server"],
-      "env": {
-        "DATABASE_URL": "${DATABASE_URL}",
-        "VOYAGE_API_KEY": "${VOYAGE_API_KEY}"
-      }
-    },
     "SellessMCP": {
       "command": "uv",
       "args": ["run", "python", "-m", "src.selless_mcp.server"],

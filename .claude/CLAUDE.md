@@ -158,24 +158,33 @@ reduced to exact/keyed template lookup or retired per D-29.)*
 
 ---
 
-## Escalation Semantics Reference *(advisory per D-30)*
+## Verdict Shape — D-33 Always-Draft + Optional Advisory Hint
 
-> Under D-30 the pipeline **always drafts**; escalation is **optional/advisory**, not a forced
-> no-draft outcome. This payload remains the canonical shape **if/when** a human-routing signal is
-> recorded (e.g. for money/legal triage), but it no longer suppresses the draft.
+> Under D-30/D-33 the pipeline **always drafts**. The verdict is **always** `action: "draft"`.
+> An optional `escalation_hint` field MAY be attached for money/legal/injection/low-confidence
+> signals so a human reviewer can triage — but it **never suppresses the draft**.
 
-When recording an (advisory) escalation signal, emit a structured verdict:
+The canonical always-draft verdict shape:
 ```json
 {
-  "action": "escalate",
-  "reason": "<primary-signal-label>",
-  "signals": {
-    "low_confidence": false,
-    "high_risk_category": true,
-    "conflict": false,
-    "stale_only": false,
-    "missing_key": false
+  "action": "draft",
+  "body": "<customer reply text>",
+  "citations": [
+    {"id": "SEL-1", "source": "Selless order data", "snippet": "<field: value>"}
+  ],
+  "escalation_hint": {
+    "reason": "<money|legal|injection|low_confidence|missing_key>",
+    "signals": {
+      "low_confidence": false,
+      "high_risk_category": true,
+      "missing_key": false
+    }
   }
 }
 ```
-The lead MUST NOT draft a reply and then second-guess the escalation — escalation is final.
+
+`escalation_hint` is `null` (omitted) when there are no advisory signals. When present, it is
+informational only — it does NOT suppress the `action: "draft"` verdict or prevent `submit_reply`
+from executing. The pipeline emits a draft in all cases (D-33).
+
+**There is no `action: "escalate"` verdict in the always-draft PoC.**
