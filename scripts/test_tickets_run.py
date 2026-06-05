@@ -1003,10 +1003,12 @@ def build_xlsx() -> None:
             "Resolution status": ai.get("resolution_status", ""),
         }
 
-        # Build the ordered, non-empty CS property rows
-        ordered = [p for p in _PRIORITY_PROPS if (props.get(p) or "").strip()]
+        # Build the ordered, non-empty CS property rows.
+        # props may now hold non-str values (e.g. FD status/priority ints from
+        # fd_props) — coerce before .strip() so int values don't blow up.
+        ordered = [p for p in _PRIORITY_PROPS if str(props.get(p) or "").strip()]
         rest = [k for k, v in props.items()
-                if (v or "").strip() and k not in ordered and k != "Ticket ID"]
+                if str(v or "").strip() and k not in ordered and k != "Ticket ID"]
         rows = ordered + rest
 
         r = 2

@@ -296,3 +296,34 @@ def test_extract_fd_props_no_network() -> None:
     fd_props, order_code = _extract_fd_props(fake)
     assert order_code == "99-1", f"Expected order_code='99-1', got {order_code!r}"
     assert isinstance(fd_props, dict), "fd_props must be a dict"
+
+
+def test_build_xlsx_handles_int_props(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: build_xlsx must not crash when cs_props holds non-str values.
+
+    fd_props merges FD `status`/`priority` (ints) into cs_props. build_xlsx
+    previously did `(props.get(p) or "").strip()`, raising AttributeError on
+    ints. Coercing to str fixes it. Offline: writes a record to a tmp data file
+    and builds the workbook to a tmp path — no network.
+    """
+    import scripts.test_tickets_run as ttr
+
+    data_path = tmp_path / "data.jsonl"
+    xlsx_path = tmp_path / "out.xlsx"
+    rec = {
+        "category_file": "unknown",
+        "ticket_id": "1",
+        "cs_props": {"Ticket ID": "1", "Status": 4, "Priority": 1, "Level_in": "Inquiry"},
+        "customer_msg": "hi",
+        "cs_reply": "",
+        "fetch_error": "",
+        "selless_order": None,
+        "ai_properties": {"customer_request": "Ask_About_Order"},
+        "ai_verdict": {"action": "draft", "body": "x", "template_code": "G12"},
+    }
+    data_path.write_text(__import__("json").dumps(rec) + "\n", encoding="utf-8")
+    monkeypatch.setattr(ttr, "_DATA_PATH", data_path)
+    monkeypatch.setattr(ttr, "_XLSX_PATH", xlsx_path)
+
+    ttr.build_xlsx()  # must not raise on int-valued props
+    assert xlsx_path.exists(), "build_xlsx should write the workbook with int props present"
