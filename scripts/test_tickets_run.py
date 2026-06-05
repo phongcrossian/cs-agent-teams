@@ -1039,6 +1039,234 @@ def build_xlsx() -> None:
     print(f"WROTE {len(records)} sheet(s) -> {_XLSX_PATH}", flush=True)
 
 
+# ---------------------------------------------------------------------------
+# Run subcommand helpers (D-41..D-45)
+# ---------------------------------------------------------------------------
+
+def _parse_ticket_list(path: str) -> list[dict]:
+    """Parse a uat_ticket.csv (semicolon-delimited) or a plain one-ID-per-line file.
+
+    For the semicolon-delimited format (header: Level_in;Resolved date;Ticket ID):
+      - Preserves 'Ticket ID' and 'Level_in' bucket for each row.
+      - 'Resolved date' is informational and kept but not used by the run path.
+
+    For a plain one-ID-per-line file (no header row matching the expected columns):
+      - Each non-empty line is treated as a Ticket ID with Level_in = "unknown".
+
+    Returns list of dicts with at minimum: {'Ticket ID': str, 'Level_in': str}.
+    """
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    lines = [l.rstrip("\r\n") for l in text.splitlines() if l.strip()]
+    if not lines:
+        return []
+
+    # Detect CSV format by checking if first line is the semicolon-header
+    first = lines[0]
+    if ";" in first and "Ticket ID" in first and "Level_in" in first:
+        # Semicolon-delimited format
+        reader = csv.DictReader(iter(lines), delimiter=";")
+        rows: list[dict] = []
+        for row in reader:
+            tid = (row.get("Ticket ID") or "").strip()
+            if not tid:
+                continue
+            rows.append({
+                "Ticket ID": tid,
+                "Level_in": (row.get("Level_in") or "").strip(),
+                "Resolved date": (row.get("Resolved date") or "").strip(),
+            })
+        return rows
+
+    # Plain one-ID-per-line (convenience format)
+    rows = []
+    for line in lines:
+        tid = line.strip()
+        if tid:
+            rows.append({"Ticket ID": tid, "Level_in": "unknown"})
+    return rows
+
+
+def _apply_caps(
+    rows: list[dict],
+    limit: int | None,
+    per_cat: int | None,
+) -> tuple[list[dict], dict[str, int]]:
+    """Apply --limit and --per-cat caps to a list of ticket rows.
+
+    Args:
+        rows: list of dicts with at minimum 'Level_in' and 'Ticket ID'.
+        limit: total cap across all buckets (None = no total cap).
+        per_cat: per-Level_in cap (None = no per-bucket cap).
+
+    Returns:
+        (selected_rows, dropped_report) where:
+          - selected_rows: the rows that passed both caps.
+          - dropped_report: dict mapping bucket -> dropped count.
+    """
+    # Apply per-cat cap first (bucket-level)
+    if per_cat is not None:
+        by_bucket: dict[str, list[dict]] = {}
+        for r in rows:
+            b = r.get("Level_in", "unknown") or "unknown"
+            by_bucket.setdefault(b, []).append(r)
+
+        selected: list[dict] = []
+        dropped_report: dict[str, int] = {}
+        for bucket, bucket_rows in by_bucket.items():
+            kept = bucket_rows[:per_cat]
+            dropped = bucket_rows[per_cat:]
+            selected.extend(kept)
+            if dropped:
+                dropped_report[bucket] = len(dropped)
+    else:
+        selected = list(rows)
+        dropped_report = {}
+
+    # Apply global limit cap
+    if limit is not None and len(selected) > limit:
+        over = selected[limit:]
+        selected = selected[:limit]
+        # Attribute dropped to their buckets
+        for r in over:
+            b = r.get("Level_in", "unknown") or "unknown"
+            dropped_report[b] = dropped_report.get(b, 0) + 1
+
+    return selected, dropped_report
+
+
+async def _process_row(
+    row: dict,
+    client: httpx.Client,
+    sclient: httpx.AsyncClient,
+    domain: str,
+    key: str,
+    category_hint: str | None = None,
+) -> dict:
+    """Per-ticket pipeline shared by both `collect()` and `run()`.
+
+    Fetches conversation (Freshdesk GET, read-only), resolves Selless order (read-only
+    when an order code is present), runs the real ai team (DRY_RUN), and returns a
+    record dict in the same shape collect() accumulates.
+    """
+    tid = (row.get("Ticket ID") or "").strip()
+    order_code = (row.get("Order") or "").strip()
+    conv = fetch_conversation(client, domain, key, tid)
+    ticket = {
+        "ticket_id": tid,
+        "subject": row.get("Subject", ""),
+        "order_ref": order_code,
+        "body": conv["customer_msg"],
+    }
+    # Resolve Selless order only when we have a code (uat_ticket.csv has no Order column
+    # so order_code will be empty there -> None triggers D-34 clarify-order flow).
+    selless = await fetch_selless_order(sclient, order_code) if order_code else None
+
+    # category_hint: Level_in from uat_ticket.csv when present, else None
+    ai = await run_ai_team(ticket, selless, category_hint or None)
+
+    cat_label = category_hint or "unknown"
+    act = ai["verdict"].get("action")
+    cr = ai["properties"].get("customer_request", "?")
+    tc = ai["properties"].get("template_code") or ai["verdict"].get("template_code", "?")
+    print(
+        f"  tid={tid} cat={cat_label} fetch={'ok' if not conv['error'] else conv['error']} "
+        f"msg_len={len(conv['customer_msg'])} selless={'Y' if selless else 'n'} "
+        f"AI={act} cr={cr} tmpl={tc}",
+        flush=True,
+    )
+    return {
+        "category_file": cat_label,
+        "ticket_id": tid,
+        "cs_props": {k: row.get(k, "") for k in row.keys()},
+        "customer_msg": conv["customer_msg"],
+        "cs_reply": conv["cs_reply"],
+        "fetch_error": conv["error"],
+        "selless_order": selless,
+        "ai_properties": ai["properties"],
+        "ai_verdict": ai["verdict"],
+    }
+
+
+async def run(
+    ticket_id: str | None,
+    list_path: str | None,
+    limit: int | None,
+    per_cat: int,
+) -> None:
+    """D-41: run subcommand — drive any ticket(s) through the real cs-agent-team.
+
+    --id  <ticket_id>: single ticket by ID (one synthetic row, DRY_RUN, read-only PROD).
+    --list <csv>: batch from uat_ticket.csv (;-delimited, Level_in bucket, D-42).
+    --limit N: total cap (D-43).
+    --per-cat N: per-Level_in cap, default 10 (D-43).
+
+    Cap drops are always logged (count + buckets), never silent.
+    Output: overwrites _DATA_PATH + calls build_xlsx() -> test-tickets.xlsx (D-44).
+    Never POSTs to Freshdesk (assert settings.dry_run, D-39).
+    """
+    assert settings.dry_run, "FATAL: settings.dry_run is False — aborting (no live posts allowed, D-39)."
+
+    env = _load_env_prd()
+    domain, key = env["FRESHDESK_DOMAIN"], env["FRESHDESK_API_KEY"]
+
+    # Build the row set
+    if ticket_id:
+        rows: list[dict] = [{"Ticket ID": ticket_id.strip(), "Level_in": ""}]
+    elif list_path:
+        all_rows = _parse_ticket_list(list_path)
+        rows, dropped_report = _apply_caps(all_rows, limit=limit, per_cat=per_cat)
+        if dropped_report:
+            total_dropped = sum(dropped_report.values())
+            bucket_summary = ", ".join(f"{b}={n}" for b, n in dropped_report.items())
+            print(
+                f"[run] Cap applied: {len(rows)} selected, {total_dropped} dropped "
+                f"(per-bucket: {bucket_summary})",
+                flush=True,
+            )
+        else:
+            print(f"[run] {len(rows)} ticket(s) to process (no cap drops)", flush=True)
+    else:
+        print("ERROR: --id or --list is required for the run subcommand.", file=sys.stderr)
+        sys.exit(1)
+
+    records: list[dict] = []
+    sclient = httpx.AsyncClient(base_url=_SELLESS_BASE, timeout=20)
+    with httpx.Client() as client:
+        for i, row in enumerate(rows, 1):
+            tid = (row.get("Ticket ID") or "").strip()
+            if not tid:
+                continue
+            # Use Level_in as a category hint when available (maps to collect() cat parameter)
+            level_in = (row.get("Level_in") or "").strip()
+            # Normalize Level_in to the collect() category keys (lower + underscore)
+            cat_hint: str | None = None
+            if level_in:
+                normalized = level_in.lower().replace(" ", "_")
+                # Map uat_ticket.csv Level_in values to collect() category keys
+                cat_map = {
+                    "change_request": "change_request",
+                    "complaint": "complaint",
+                    "inquiry": "inquiry",
+                }
+                cat_hint = cat_map.get(normalized)
+                if cat_hint is None:
+                    # Pass as-is for unknown categories (non-blocking)
+                    cat_hint = normalized if normalized else None
+
+            print(f"[run {i}/{len(rows)}] processing tid={tid} ...", flush=True)
+            rec = await _process_row(row, client, sclient, domain, key, cat_hint)
+            records.append(rec)
+            time.sleep(0.3)
+
+    await sclient.aclose()
+
+    with open(_DATA_PATH, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"[run] DONE {len(records)} record(s) -> {_DATA_PATH}", flush=True)
+    build_xlsx()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1049,6 +1277,14 @@ def main() -> int:
     d = sub.add_parser("draft")
     d.add_argument("--category", default=None, choices=list(_CSV.keys()))
     sub.add_parser("xlsx")
+    # D-41: new `run` subcommand
+    r = sub.add_parser("run")
+    r.add_argument("--id", dest="ticket_id", default=None, help="Single ticket ID")
+    r.add_argument("--list", dest="list_path", default=None,
+                   help="Path to uat_ticket.csv (;-delimited, header Level_in;Resolved date;Ticket ID)")
+    r.add_argument("--limit", type=int, default=None, help="Total ticket cap (D-43)")
+    r.add_argument("--per-cat", type=int, default=10,
+                   help="Per-Level_in cap, default 10 (D-43)")
     args = ap.parse_args()
     if args.cmd == "collect":
         asyncio.run(collect(args.per_cat, args.ticket, args.category))
@@ -1056,6 +1292,8 @@ def main() -> int:
         asyncio.run(draft(args.category))
     elif args.cmd == "xlsx":
         build_xlsx()
+    elif args.cmd == "run":
+        asyncio.run(run(args.ticket_id, args.list_path, args.limit, args.per_cat))
     return 0
 
 
