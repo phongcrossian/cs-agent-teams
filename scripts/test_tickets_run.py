@@ -1189,6 +1189,70 @@ def build_xlsx() -> None:
                 ws.cell(r, 3, str(prop_val) if not isinstance(prop_val, str) else prop_val)
                 r += 1
 
+        # 08-02: FD re-classification side-by-side (AI vs CS gold, per owned field)
+        fd_upd = rec.get("fd_property_update") or {}
+        fd_match_rec = rec.get("fd_field_match") or {}
+        if fd_upd:
+            r += 1
+            ws.cell(r, 1, "— FD re-classification (AI vs CS gold) —").font = label_font
+            r += 1
+            # Column headers for this section
+            ws.cell(r, 1, "Field").font = hdr_font
+            ws.cell(r, 2, "CS gold").font = hdr_font
+            ws.cell(r, 3, "AI value + status").font = hdr_font
+            ws.cell(r, 4, "Match").font = hdr_font
+            for c in range(1, 5):
+                ws.cell(r, c).fill = hdr_fill
+            r += 1
+
+            upd_fields = fd_upd.get("fields") or {}
+            n_match = n_owned = 0
+            for field in OWNED_FIELDS:
+                field_entry = upd_fields.get(field) or {}
+                ai_val = field_entry.get("value") or ""
+                status = field_entry.get("status") or "missing"
+
+                match_entry = fd_match_rec.get(field) or {}
+                cs_gold = match_entry.get("cs_gold") or ""
+                match_val = match_entry.get("match")
+
+                # Status flag (mirror template_valid ✓/✗ style)
+                if status == "valid":
+                    status_str = "✓ valid"
+                elif status == "invalid":
+                    status_str = "✗ INVALID (not in enum)"
+                elif status == "unverifiable":
+                    status_str = "unverifiable (enum empty)"
+                elif status == "nested_mismatch":
+                    status_str = "✗ nested_mismatch"
+                else:
+                    status_str = "missing"
+
+                ai_cell_text = f"{ai_val}  [{status_str}]" if ai_val else f"[{status_str}]"
+
+                # Match display
+                if match_val is True:
+                    match_str = "match"
+                    n_match += 1
+                elif match_val is False:
+                    match_str = "differ"
+                else:
+                    match_str = "no gold"
+                n_owned += 1
+
+                ws.cell(r, 1, field)
+                ws.cell(r, 2, str(cs_gold) if cs_gold is not None else "")
+                ai_cell = ws.cell(r, 3, ai_cell_text)
+                ai_cell.fill = ai_fill
+                ws.cell(r, 4, match_str)
+                r += 1
+
+            # Summary row: N/M owned fields match CS gold
+            r += 1
+            summary_text = f"FD per-field match: {n_match}/{n_owned} owned fields match CS gold"
+            ws.cell(r, 1, summary_text).font = label_font
+            r += 1
+
         # Column D — D2 customer msg, D3 CS reply, D4 AI reply (labels prefixed)
         if dft:
             ai_reply = f"[ERROR] {dft.get('error')}" if dft.get("error") else (dft.get("reply") or "[empty]")

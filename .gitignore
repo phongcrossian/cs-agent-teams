@@ -37,3 +37,7 @@ htmlcov/
 **/snapshots/**/*.csv
 **/ticket-sample/
 /tmp/cs_golden_analysis.jsonl
+
+# Agent-team ticket test output (contains customer PII — never commit)
+**/.test-tickets-data.jsonl
+test-tickets.xlsx

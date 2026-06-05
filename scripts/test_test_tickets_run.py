@@ -671,3 +671,177 @@ def test_fd_field_match_case_insensitive() -> None:
     assert match_result["Customer_Request"]["match"] is True, (
         "Case-insensitive match: 'Return' vs 'RETURN' -> True"
     )
+
+
+# ---------------------------------------------------------------------------
+# 08-02 Task 2: build_xlsx renders FD re-classification section + DRY_RUN gate
+# ---------------------------------------------------------------------------
+
+def _make_fd_record(ticket_id: str = "T1") -> dict:
+    """Construct a minimal record that includes fd_property_update + fd_field_match."""
+    import json as _json
+    return {
+        "category_file": "complaint",
+        "ticket_id": ticket_id,
+        "cs_props": {"Ticket ID": ticket_id, "Level_in": "Complaint", "Customer_Request": "Return"},
+        "fd_props": {"Level_in": "Complaint", "Customer_Request": "Replace"},
+        "customer_msg": "My order doesn't fit.",
+        "cs_reply": "We can help with that.",
+        "fetch_error": "",
+        "selless_order": None,
+        "ai_properties": {
+            "category": "complaint",
+            "customer_request": "Return",
+            "confidence": "high",
+            "template_code": "B5",
+            "flow": "",
+            "step": "",
+            "rootcause": "",
+        },
+        "ai_verdict": {"action": "draft", "body": "Dear customer...", "template_code": "B5"},
+        "fd_property_update": {
+            "fields": {
+                "Level_in": {"field": "Level_in", "value": "Complaint", "status": "valid", "allowed": ["Complaint"]},
+                "Customer_Request": {"field": "Customer_Request", "value": "Return", "status": "valid", "allowed": ["Return"]},
+                "Rootcause": {"field": "Rootcause", "value": "", "status": "missing", "allowed": []},
+                "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+                "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+            },
+            "all_valid": False,
+            "advisory": True,
+        },
+        "fd_field_match": {
+            "Level_in": {"ai_value": "Complaint", "cs_gold": "Complaint", "match": True, "status": "match"},
+            "Customer_Request": {"ai_value": "Return", "cs_gold": "Replace", "match": False, "status": "differ"},
+            "Rootcause": {"ai_value": "", "cs_gold": None, "match": None, "status": "no_gold"},
+            "Flow": {"ai_value": "", "cs_gold": None, "match": None, "status": "no_gold"},
+            "Section_Flow": {"ai_value": "", "cs_gold": None, "match": None, "status": "no_gold"},
+        },
+    }
+
+
+def test_build_xlsx_fd_reclassification_section(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """build_xlsx renders the '— FD re-classification (AI vs CS gold) —' section.
+
+    Verifies:
+    - The workbook is created without raising.
+    - The sheet for the ticket exists.
+    - The workbook contains at least one cell with 'FD re-classification' text.
+    - The N/M summary row is present.
+    OFFLINE: writes record to tmp jsonl, builds workbook to tmp xlsx.
+    """
+    import json as _json
+    import scripts.test_tickets_run as ttr
+    from openpyxl import load_workbook
+
+    data_path = tmp_path / "data.jsonl"
+    xlsx_path = tmp_path / "out.xlsx"
+    rec = _make_fd_record("T99")
+    data_path.write_text(_json.dumps(rec) + "\n", encoding="utf-8")
+    monkeypatch.setattr(ttr, "_DATA_PATH", data_path)
+    monkeypatch.setattr(ttr, "_XLSX_PATH", xlsx_path)
+
+    ttr.build_xlsx()
+    assert xlsx_path.exists(), "build_xlsx should write the workbook"
+
+    wb = load_workbook(xlsx_path)
+    ws = wb["T99"]
+    all_values = [str(ws.cell(row=r, column=c).value or "") for r in range(1, ws.max_row + 1) for c in range(1, 5)]
+    text_blob = " ".join(all_values)
+
+    assert "FD re-classification" in text_blob, (
+        "Sheet must contain the '— FD re-classification (AI vs CS gold) —' section header"
+    )
+    assert "FD per-field match" in text_blob, (
+        "Sheet must contain the N/M summary row"
+    )
+
+
+def test_build_xlsx_fd_reclassification_per_field_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """build_xlsx renders per-field status flags (✓ valid / ✗ INVALID / missing).
+
+    The AI value cell must contain the status string so reviewers see validity inline.
+    OFFLINE: writes record to tmp jsonl.
+    """
+    import json as _json
+    import scripts.test_tickets_run as ttr
+    from openpyxl import load_workbook
+
+    data_path = tmp_path / "data.jsonl"
+    xlsx_path = tmp_path / "out.xlsx"
+
+    rec = _make_fd_record("T100")
+    # Inject an invalid Customer_Request to test the ✗ INVALID rendering
+    rec["fd_property_update"]["fields"]["Customer_Request"] = {
+        "field": "Customer_Request", "value": "INVENTED_XYZ", "status": "invalid", "allowed": ["Return"]
+    }
+    data_path.write_text(_json.dumps(rec) + "\n", encoding="utf-8")
+    monkeypatch.setattr(ttr, "_DATA_PATH", data_path)
+    monkeypatch.setattr(ttr, "_XLSX_PATH", xlsx_path)
+
+    ttr.build_xlsx()
+    wb = load_workbook(xlsx_path)
+    ws = wb["T100"]
+    all_values = [str(ws.cell(row=r, column=c).value or "") for r in range(1, ws.max_row + 1) for c in range(1, 5)]
+    text_blob = " ".join(all_values)
+
+    assert "INVALID" in text_blob, (
+        "An 'invalid' status field must render with 'INVALID' text in the sheet"
+    )
+    assert "valid" in text_blob.lower(), (
+        "A 'valid' status field must render with 'valid' text in the sheet"
+    )
+
+
+def test_build_xlsx_graceful_missing_fd_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """build_xlsx handles records that predate the fd_property_update/fd_field_match keys.
+
+    Records without those keys (legacy records) must not cause a crash.
+    OFFLINE: writes record without fd_property_update to tmp jsonl.
+    """
+    import json as _json
+    import scripts.test_tickets_run as ttr
+
+    data_path = tmp_path / "data.jsonl"
+    xlsx_path = tmp_path / "out.xlsx"
+    # Minimal record WITHOUT fd_property_update / fd_field_match (legacy shape)
+    rec = {
+        "category_file": "inquiry",
+        "ticket_id": "T_LEGACY",
+        "cs_props": {"Ticket ID": "T_LEGACY", "Level_in": "Inquiry"},
+        "customer_msg": "hi",
+        "cs_reply": "",
+        "fetch_error": "",
+        "selless_order": None,
+        "ai_properties": {"customer_request": "Ask_About_Order"},
+        "ai_verdict": {"action": "draft", "body": "hello"},
+    }
+    data_path.write_text(_json.dumps(rec) + "\n", encoding="utf-8")
+    monkeypatch.setattr(ttr, "_DATA_PATH", data_path)
+    monkeypatch.setattr(ttr, "_XLSX_PATH", xlsx_path)
+
+    ttr.build_xlsx()  # must not raise on missing fd_property_update
+    assert xlsx_path.exists(), "build_xlsx should write workbook even for legacy records"
+
+
+def test_no_live_write_path_in_harness() -> None:
+    """Structural guard: test_tickets_run.py must contain no live PUT/write FD path.
+
+    Grep for PUT patterns in the source (excluding comments). The only Freshdesk
+    verbs must remain read-only GETs. DRY_RUN posture (D-39 / T-08-05).
+    """
+    import re
+    src = Path("scripts/test_tickets_run.py").read_text(encoding="utf-8")
+    # Strip comment lines before searching
+    non_comment_lines = [line for line in src.splitlines() if not line.lstrip().startswith("#")]
+    non_comment_src = "\n".join(non_comment_lines)
+
+    # Patterns that would indicate a live FD write path
+    forbidden = re.compile(
+        r'\.put\s*\(|requests\.put|httpx.*PUT|/tickets/[^"\']*["\'],\s*json=|'
+        r'api/v2/tickets/[^"\']*reply'
+    )
+    matches = forbidden.findall(non_comment_src)
+    assert matches == [], (
+        f"No live PUT/write FD path must exist in test_tickets_run.py. Found: {matches}"
+    )
