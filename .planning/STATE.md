@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Phase 4 always-draft rework DONE (308 tests); AI-vs-CS validation iter-3: error 29->17, ok 0->8 over 3 iters"
-last_updated: "2026-06-05T03:54:14.104Z"
+stopped_at: Phase 4 /test-ticket command context gathered (D-41..D-45)
+last_updated: "2026-06-05T07:45:01.678Z"
 last_activity: 2026-06-05
 progress:
   total_phases: 7
@@ -166,6 +166,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T03:54:14.096Z
-Stopped at: Phase 4 always-draft rework DONE (308 tests); AI-vs-CS validation iter-3: error 29->17, ok 0->8 over 3 iters
-Resume file: .planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards/.continue-here.md
+Last session: 2026-06-05T07:45:01.671Z
+Stopped at: Phase 4 /test-ticket command context gathered (D-41..D-45)
+Resume file: .planning/phases/04-reply-pipeline-classify-extract-ground-draft-safety-guards/04-CONTEXT.md
