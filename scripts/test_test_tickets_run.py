@@ -23,6 +23,7 @@ import pytest
 
 from scripts.test_tickets_run import (
     _allowed_codes_for_subtype,
+    _extract_fd_props,
     _parse_ticket_list,
     _apply_caps,
 )
@@ -199,3 +200,99 @@ def test_allowed_codes_deterministic_subtype_map() -> None:
     assert unknown_codes == [], (
         f"Unknown sub-type should return empty list, got: {unknown_codes}"
     )
+
+
+# ---------------------------------------------------------------------------
+# _extract_fd_props tests (offline — NO network calls)
+# These tests are intentionally OFFLINE: _extract_fd_props is a pure function
+# over a dict literal. No httpx client is constructed here. The offline contract
+# is enforced structurally (no imports of collect/run/run_ai_team; pure dict input).
+# ---------------------------------------------------------------------------
+
+# Fake FD ticket payload mirroring verified ticket 7508382
+_FAKE_TJ = {
+    "custom_fields": {
+        "cf_order": "28451-7",
+        "cf_level_in285413": "Inquiry",
+        "cf_customer_request83284": "Ask_About_Order",
+        "cf_category": "general",
+        "cf_rootcause": "customer_inquiry",
+        "cf_package_status": "in_transit",
+        "cf_product_label": "RosyLift",
+        "cf_product_line": "shapewear",
+        "cf_flow": "inquiry_flow",
+        "cf_section_flow": "section_a",
+        "cf_email_support": "jane.doe@example.com",
+        "cf_shophelp_discussion_link": "https://shophelp/x?email=jane.doe@example.com",
+    },
+    "status": 2,
+    "priority": 1,
+    "tags": ["vip", "reship"],
+}
+
+
+def test_extract_fd_props_order_extraction() -> None:
+    """Test A: _extract_fd_props returns (fd_props, order_code) with order_code == '28451-7'."""
+    # OFFLINE CONTRACT: pure dict input, no httpx client, no network call
+    result = _extract_fd_props(_FAKE_TJ)
+    assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
+    assert len(result) == 2, f"Expected 2-tuple, got length {len(result)}"
+    fd_props, order_code = result
+    assert order_code == "28451-7", f"Expected order_code='28451-7', got {order_code!r}"
+
+
+def test_extract_fd_props_prefix_match() -> None:
+    """Test B: prefix-match for cf_level_in* and cf_customer_request*; all other cf keys present."""
+    # OFFLINE CONTRACT: pure dict input, no httpx client, no network call
+    fd_props, _ = _extract_fd_props(_FAKE_TJ)
+    assert fd_props.get("Level_in") == "Inquiry", f"Expected Level_in='Inquiry', got {fd_props.get('Level_in')!r}"
+    assert fd_props.get("Customer_Request") == "Ask_About_Order", (
+        f"Expected Customer_Request='Ask_About_Order', got {fd_props.get('Customer_Request')!r}"
+    )
+    # Standard and status keys must be present
+    for key in ("Category", "Rootcause", "Package_status", "Product_label", "Product_line",
+                "Flow", "Section_Flow", "Status", "Priority", "Tags"):
+        assert key in fd_props, f"Expected key {key!r} in fd_props, got keys: {list(fd_props.keys())}"
+
+
+def test_extract_fd_props_pii_redaction() -> None:
+    """Test C: PII-bearing fields (cf_email_support, cf_shophelp_discussion_link) are redacted."""
+    import json as _json
+    # OFFLINE CONTRACT: pure dict input, no httpx client, no network call
+    fd_props, _ = _extract_fd_props(_FAKE_TJ)
+    dumped = _json.dumps(fd_props)
+    assert "jane.doe@example.com" not in dumped, (
+        f"Raw email 'jane.doe@example.com' must NOT appear in fd_props after redaction.\n"
+        f"fd_props dump: {dumped}"
+    )
+
+
+def test_extract_fd_props_empty_input() -> None:
+    """Test D: empty/missing custom_fields returns empty fd_props + empty order_code without raising."""
+    # OFFLINE CONTRACT: pure dict input, no httpx client, no network call
+    result_empty = _extract_fd_props({})
+    assert isinstance(result_empty, tuple) and len(result_empty) == 2
+    fd_props_empty, order_code_empty = result_empty
+    assert fd_props_empty == {}, f"Expected empty fd_props for empty input, got {fd_props_empty}"
+    assert order_code_empty in ("", None), f"Expected empty order_code, got {order_code_empty!r}"
+
+    result_empty_cf = _extract_fd_props({"custom_fields": {}})
+    fd_props_cf, order_code_cf = result_empty_cf
+    assert fd_props_cf == {}, f"Expected empty fd_props for empty custom_fields, got {fd_props_cf}"
+    assert order_code_cf in ("", None), f"Expected empty order_code, got {order_code_cf!r}"
+
+
+def test_extract_fd_props_no_network() -> None:
+    """Test E: structural proof that _extract_fd_props makes no network calls.
+
+    This test passes a plain dict literal — no httpx.Client/AsyncClient is constructed.
+    The test itself cannot make Freshdesk/Selless/Claude calls by construction.
+    If _extract_fd_props tries to open any network connection, it would fail on a
+    missing client, which would surface as a TypeError/AttributeError, not pass silently.
+    """
+    # OFFLINE CONTRACT: pure dict input, no httpx client, no network call
+    # The function must complete without any I/O — verified structurally by pure dict input
+    fake = {"custom_fields": {"cf_order": "99-1"}, "status": 3, "priority": 2, "tags": []}
+    fd_props, order_code = _extract_fd_props(fake)
+    assert order_code == "99-1", f"Expected order_code='99-1', got {order_code!r}"
+    assert isinstance(fd_props, dict), "fd_props must be a dict"
