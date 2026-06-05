@@ -78,8 +78,17 @@ _PRIORITY_PROPS = [
 # ---------------------------------------------------------------------------
 
 def _load_env_prd() -> dict[str, str]:
+    # Walk up from _REPO_ROOT to find .env.prd — handles both main repo and worktree layouts
+    # (worktrees share credentials with the main repo; the file lives in the main repo root).
+    candidate = _REPO_ROOT / ".env.prd"
+    if not candidate.exists():
+        for parent in _REPO_ROOT.parents:
+            alt = parent / ".env.prd"
+            if alt.exists():
+                candidate = alt
+                break
     env: dict[str, str] = {}
-    for line in (_REPO_ROOT / ".env.prd").read_text().splitlines():
+    for line in candidate.read_text().splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.split("=", 1)
