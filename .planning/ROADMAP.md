@@ -92,7 +92,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-03-PLAN.md — Rework scripts/cs_team_demo.py to always-draft + advisory hint + D-34 fallback (no deleted-guard imports, file-store grounded, DRY_RUN submit_reply, injection_screen as advisory pre-screen); fixtures + always-draft contract test across benign/high-risk/injection/missing-order (SAFE-03/SAFE-04/REP-03, Wave 3)
 - [x] 04-04-PLAN.md — Clean tests/cs_team to the always-draft contract: DELETE 6 retired-contract test files + slim conftest to injection_screen/pii_redact; REWRITE e2e/settings-bindings/team-definitions/kit-structure to always-draft + two-hook + file-store; pytest tests/cs_team -q GREEN (REP-01/REP-04/SAFE-03/SAFE-04, Wave 3)
 - [x] 04-05-PLAN.md — Rework subagent-detail skills classify-ticket/extract-answer-key/self-critique to advisory signals + D-34 flow semantics + file-store faithfulness (no lookup_code/semantic_search/[KB-N]/escalate=no-draft; REP-01/02/04 + SAFE-03 dimensions kept), Wave 2
-- [ ] 04-06-PLAN.md — `/test-ticket` on-demand command (D-41..D-45): add `run --id/--list/--limit/--per-cat` subcommand to scripts/test_tickets_run.py reusing collect() real-team path (D-35) + build_xlsx(); parse `;`-delimited uat_ticket.csv (bucket by Level_in) capped with logged drops (D-43); thin .claude/commands/test-ticket.md slash wrapper (no logic); DRY_RUN read-only PROD, outputs to gitignored test-tickets.xlsx only (D-39/D-44); reuses deterministic _SUBTYPE_TEMPLATES (no free-pick) (REP-03/REP-04/SAFE-03/SAFE-04, Wave 1)
+- [x] 04-06-PLAN.md — `/test-ticket` on-demand command (D-41..D-45): add `run --id/--list/--limit/--per-cat` subcommand to scripts/test_tickets_run.py reusing collect() real-team path (D-35) + build_xlsx(); parse `;`-delimited uat_ticket.csv (bucket by Level_in) capped with logged drops (D-43); thin .claude/commands/test-ticket.md slash wrapper (no logic); DRY_RUN read-only PROD, outputs to gitignored test-tickets.xlsx only (D-39/D-44); reuses deterministic _SUBTYPE_TEMPLATES (no free-pick) (REP-03/REP-04/SAFE-03/SAFE-04, Wave 1)
 **UI hint**: no
 
 ### Phase 5: Offline Evaluation Harness (THE GATE)
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Knowledge Survey & Conflict Inventory | 4/4 | Complete | 2026-05-29 |
 | 2. Freshdesk I/O Layer & Pipeline Backbone | 6/6 | Complete   | 2026-06-01 |
 | 3. Grounding Layer (Selless MCP + Knowledge RAG MCP) | 5/5 | Complete   | 2026-06-02 |
-| 4. Reply Pipeline + Safety Guards | 6/6 | Complete   | 2026-06-05 |
+| 4. Reply Pipeline + Safety Guards | 7/7 | Complete   | 2026-06-05 |
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
