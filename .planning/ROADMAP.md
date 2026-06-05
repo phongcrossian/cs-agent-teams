@@ -145,6 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
+| 8. Ticket Re-Classification & FD Property Write-Back | 0/2 | Planned | - |
 
 ### Phase 8: Ticket Re-Classification & FD Property Write-Back
 
@@ -180,4 +181,6 @@ manual / out of scope for this phase.
   5. DRY_RUN only — no live `PUT /tickets/{id}` path; assert no Freshdesk write occurs beyond the
      existing `submit_reply` chokepoint.
 
-**Plans**: TBD (run /gsd-plan-phase 8 to break down)
+**Plans**: 2 plans (2 waves; offline foundation → harness wiring)
+- [ ] 08-01-PLAN.md — Static ticket_fields enum loader (src/file_store/ticket_fields_store.py) + enum-validation/fd_property_update assembler (src/file_store/fd_classification.py); offline TDD; mirrors allowed-template-codes guard; empty-enum → unverifiable (Wave 1)
+- [ ] 08-02-PLAN.md — Wire fd_property_update into the harness: assemble in _process_row + render AI-vs-CS-gold side-by-side with per-field match + *_valid in build_xlsx; assert DRY_RUN (no PUT); gitignore test-tickets.xlsx (Wave 2)
