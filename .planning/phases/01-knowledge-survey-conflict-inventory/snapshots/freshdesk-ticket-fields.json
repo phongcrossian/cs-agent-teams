@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "source": "GET /api/v2/ticket_fields",
+    "captured": "2026-06-05",
+    "version": 1,
+    "note": "Static snapshot — runtime/tests MUST read this file, never the network. Regenerate with scripts/fetch_ticket_fields_snapshot.py when ticket_fields change.",
+    "verified_from": "ticket 7508382 (live FD payload) + WorkFlow.svg taxonomy"
+  },
+  "nested": {
+    "Level_in": {
+      "Inquiry": [
+        "Ask_About_Product",
+        "Ask_About_Policy",
+        "Ask_About_Promotion",
+        "Ask_About_Order",
+        "Ask_About_Delivery_Status"
+      ],
+      "Change_Request": [
+        "Change_Shipping_Address",
+        "Change_Non_Shipping_Address",
+        "Change_Product_Variant",
+        "Cancel_Order",
+        "Change_Shipping_Express_Line"
+      ],
+      "Complaint": [
+        "Review",
+        "Return",
+        "Replace",
+        "Full_Refund",
+        "Partial_Refund"
+      ]
+    }
+  },
+  "dropdowns": {
+    "Rootcause": [],
+    "Flow": [],
+    "Section_Flow": [],
+    "Product_line": [],
+    "Level_out": [],
+    "Package_status": [],
+    "Category": []
+  }
+}
