@@ -18,7 +18,10 @@ The mapping is:
     tests.cs_team..claude  →  (virtual package backed by .claude/__init__.py)
     tests.cs_team..claude.hooks  →  (virtual package backed by .claude/hooks/__init__.py)
     tests.cs_team..claude.hooks.injection_screen  →  .claude/hooks/injection_screen.py
-    ... (and so on for each hook)
+    tests.cs_team..claude.hooks.pii_redact        →  .claude/hooks/pii_redact.py
+
+Only the two surviving hooks (injection_screen + pii_redact) are registered.
+The four guard hooks deleted in 04-01 are NOT wired here.
 """
 
 from __future__ import annotations
@@ -35,11 +38,10 @@ _REPO_ROOT = Path(__file__).parent.parent.parent
 _PKG_PREFIX = "tests.cs_team"
 
 # Mapping: dotted suffix → actual file path (relative to repo root)
+# Only the two surviving hooks are registered after the 04-01 guard deletion.
+# injection_screen (D-14) and pii_redact (D-04) are the remaining safety floor.
 _HOOK_MODULES: dict[str, Path] = {
     ".claude.hooks.injection_screen": _REPO_ROOT / ".claude" / "hooks" / "injection_screen.py",
-    ".claude.hooks.pre_send_guard":   _REPO_ROOT / ".claude" / "hooks" / "pre_send_guard.py",
-    ".claude.hooks.escalation_gate":  _REPO_ROOT / ".claude" / "hooks" / "escalation_gate.py",
-    ".claude.hooks.grounding_check":  _REPO_ROOT / ".claude" / "hooks" / "grounding_check.py",
     ".claude.hooks.pii_redact":       _REPO_ROOT / ".claude" / "hooks" / "pii_redact.py",
 }
 
