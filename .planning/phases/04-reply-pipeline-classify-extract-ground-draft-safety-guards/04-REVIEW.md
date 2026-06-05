@@ -1,290 +1,279 @@
 ---
 phase: 04-reply-pipeline-classify-extract-ground-draft-safety-guards
-reviewed: 2026-06-04T02:05:00Z
+plan: "06"
+reviewed: 2026-06-05T08:25:00Z
 depth: standard
-files_reviewed: 17
+files_reviewed: 3
 files_reviewed_list:
-  - .claude/hooks/authorized_offer.py
-  - .claude/hooks/escalation_gate.py
-  - .claude/hooks/pre_send_guard.py
-  - .claude/agents/classifier.md
-  - .claude/agents/drafter.md
-  - .claude/skills/classify-ticket/SKILL.md
-  - .claude/skills/ground-and-draft/SKILL.md
-  - scripts/cs_team_demo.py
-  - tests/cs_team/test_authorized_offer.py
-  - tests/cs_team/test_authorized_offer_red.py
-  - tests/cs_team/test_classifier_subtype_contract.py
-  - tests/cs_team/test_drafter_offer_contract.py
-  - tests/cs_team/test_e2e_dry_run.py
-  - tests/cs_team/test_escalation_gate_operational.py
-  - tests/cs_team/test_hooks.py
-  - tests/cs_team/test_hooks_red.py
-  - tests/cs_team/test_pre_send_guard_authorized.py
+  - scripts/test_tickets_run.py
+  - scripts/test_test_tickets_run.py
+  - .claude/commands/test-ticket.md
 findings:
   critical: 2
   warning: 4
   info: 3
   total: 9
-status: resolved
+status: issues_found
 ---
 
-# Phase 4: Code Review Report
+# Phase 04 Plan 06: Code Review Report
 
-> **RESOLUTION (2026-06-04):** All Critical + Warning findings fixed — see `04-REVIEW-FIX.md`. CR-01/CR-02 bypasses verified closed via live repro; full suite 276 passed. IN-01/IN-02 remain deferred to plan 04-11 by decision. IN-03 doc drift aligned.
-
-
-**Reviewed:** 2026-06-04T02:05:00Z
+**Reviewed:** 2026-06-05T08:25:00Z
 **Depth:** standard
-**Files Reviewed:** 17
+**Files Reviewed:** 3
 **Status:** issues_found
 
 ## Summary
 
-This phase reopened Phase 4 to swap the block-all D-13 commitment guard for a
-template+threshold-aware authorized-offer guard (D-26). The new logic spans three
-safety-critical deterministic hooks: `authorized_offer.py` (the §0 decision core),
-`pre_send_guard.py` (PreToolUse@submit_reply tripwire + offer authorization), and
-`escalation_gate.py` (accumulated-risk veto, now extended with an
-`operational_action` signal for Review / Full_Refund / mutation-asserting drafts).
+Plan 04-06 repackages the Phase-4 validation harness into an on-demand `/test-ticket` command.
+The three deliverables — the `run` subcommand engine, six unit tests, and the thin slash wrapper —
+are functionally sound at the happy path. The DRY_RUN guarantee is correctly asserted in both
+`run_ai_team` (line 398) and `run()` (line 1216); no Freshdesk POST path was introduced.
+The `_SUBTYPE_TEMPLATES` deterministic map is intact; the free-pick anti-pattern (T-04.06-05)
+is not reintroduced.
 
-The test suite is broad (250 passed, 6 skipped) and per-hook unit/subprocess coverage
-is genuinely good. The D-13 → D-26 refactor was carried through cleanly: the
-`check_commitment_language` symbol referenced by older tests is gone and replaced with
-`_has_commitment_term` everywhere (only a comment in `cs_team_demo.py` mentions the
-old name), so the memory-flagged "three test files expect a removed function" concern
-is resolved.
+Key defects found: (1) `_load_env_prd()` raises an unguarded `FileNotFoundError` when `.env.prd`
+is absent from all parent directories — the walk-up loop exits without updating `candidate`, so
+`candidate.read_text()` crashes with an opaque OS error; (2) `collect()` was **not** refactored to
+call `_process_row()` as both the plan and SUMMARY claim — the per-ticket body is fully duplicated,
+creating a latent correctness risk; (3) `time.sleep(0.3)` inside async loops blocks the event
+loop; (4) `_apply_caps` attributes dropped-row buckets misleadingly under `--limit`-only mode.
 
-However, the suite has a blind spot that conceals a **real escalation bypass**:
-`escalation_gate._derive_signals` returns early whenever the payload carries an
-explicit `signals` dict, so it **never derives `operational_action`** for that payload.
-A classifier/stage that emits both a `signals` dict (the documented escalation-semantics
-shape in `.claude/CLAUDE.md`) **and** `customer_request: "Review"` (or `Full_Refund`,
-or a mutation-asserting change_request with no offer block) will pass the final
-submit_reply veto with `returncode 0` — the exact "force-escalate" cases this rework
-exists to protect. I reproduced this end-to-end through the WRITE→READ subprocess
-flow (CR-01).
-
-A second Critical concerns `authorize_offer`: threshold caps are keyed globally, not
-per sub-type, so an out-of-flow numeric offer (e.g. `refund_pct: 50` on a
-`Cancel_Order`) is authorized because the refund cap (50%) is checked independently of
-whether refunds are valid for that sub-type (CR-02).
-
-The STUB(RD-Q2)/STUB(RD-Q3) optimistic eligibility defaults are recorded as Info
-(known deferred to plan 04-11), not Critical, per the review scope note.
+---
 
 ## Critical Issues
 
-### CR-01: `operational_action` escalation silently dropped when payload carries an explicit `signals` dict
+### CR-01: `_load_env_prd()` raises bare `FileNotFoundError` when `.env.prd` is absent everywhere
 
-**File:** `.claude/hooks/escalation_gate.py:119-140` (with `:143-187`)
-**Issue:**
-`_derive_signals` short-circuits on the first explicit signals container:
+**File:** `scripts/test_tickets_run.py:80-96`
 
-```python
-for key in ("signals", "risk_signals", "escalation_signals"):
-    if isinstance(payload.get(key), dict):
-        return payload[key]          # <-- returns BEFORE operational_action is derived
-```
+**Issue:** The walk-up loop searches parent directories for `.env.prd` but only updates `candidate`
+when a match is found. When no match is found, `candidate` retains the original value
+(`_REPO_ROOT / ".env.prd"`), and line 91 calls `candidate.read_text()` unconditionally — raising
+a bare `FileNotFoundError` with no diagnostic message about what is missing or where to put it.
+In a fresh clone, a CI environment, or any git worktree where the walk-up reaches `/` without
+finding the file, the user gets an OS traceback rather than an actionable error.
 
-`_derive_operational_action` is only invoked in the **fallback** branch (line 138),
-reached only when no explicit `signals`/`risk_signals`/`escalation_signals` dict is
-present. But the escalation-semantics shape documented in `.claude/CLAUDE.md`
-("Escalation Semantics Reference") is exactly `{"action": ..., "signals": {...}}` —
-a stage emitting a `signals` dict alongside `customer_request: "Review"` is the
-expected case, not an exotic one.
-
-Reproduced end-to-end (real subprocesses, WRITE then READ@submit_reply):
-
-- WRITE `{"hook_event_name":"PostToolUse","signals":{...all False...},"customer_request":"Review"}` → state file persists `operational_action: false`.
-- READ `{"hook_event_name":"PreToolUse","tool_name":"submit_reply",...}` → **returncode 0 (PASS)**.
-
-The Review / Full_Refund / mutation-assertion force-escalate path (D-08 additive — the
-purpose of plan 04-08) is bypassed. The subprocess tests in
-`test_escalation_gate_operational.py` only send `customer_request` at the top level
-*without* an accompanying `signals` dict, so they pass while the bug is live.
-
-`pre_send_guard.py` independently blocks Review/Full_Refund *when an offer block is
-present* (via `authorize_offer`), but `escalation_gate` is the designated catch for
-no-offer / informational Review/Full_Refund drafts and for mutation-asserting
-change_request drafts carrying no offer block. Those reach submit_reply with no offer
-→ `pre_send_guard` exits 0 → `escalation_gate` is the only remaining gate → bypass.
-
-**Fix:** Always derive `operational_action`, regardless of how `signals` was sourced.
-Replace the early-return with a merge:
+**Fix:** After the walk-up loop, check `candidate.exists()` before reading and raise an explicit
+error if absent:
 
 ```python
-def _derive_signals(payload: dict) -> dict:
-    signals: dict | None = None
-    for key in ("signals", "risk_signals", "escalation_signals"):
-        if isinstance(payload.get(key), dict):
-            signals = dict(payload[key])  # copy; do not mutate caller dict
-            break
-    if signals is None:
-        for key in ("tool_result", "result", "output"):
-            nested = payload.get(key)
-            if isinstance(nested, dict):
-                for sig_key in ("signals", "risk_signals", "escalation_signals"):
-                    if isinstance(nested.get(sig_key), dict):
-                        signals = dict(nested[sig_key]); break
-            if signals is not None:
+def _load_env_prd() -> dict[str, str]:
+    candidate = _REPO_ROOT / ".env.prd"
+    if not candidate.exists():
+        for parent in _REPO_ROOT.parents:
+            alt = parent / ".env.prd"
+            if alt.exists():
+                candidate = alt
                 break
-    if signals is None:
-        known = {k for k, _ in _SIGNAL_ORDER}
-        signals = {k: bool(payload.get(k, False)) for k in known if k in payload}
-    _derive_operational_action(payload, signals)  # ALWAYS
-    return signals
+    if not candidate.exists():
+        raise FileNotFoundError(
+            f".env.prd not found in {_REPO_ROOT} or any parent directory. "
+            "Copy it from the main repo root or set FRESHDESK_DOMAIN / "
+            "FRESHDESK_API_KEY in your environment."
+        )
+    env: dict[str, str] = {}
+    for line in candidate.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip()
+    return env
 ```
-
-Add regression tests sending an all-False `signals` dict **plus** `customer_request:
-"Review"` (and `Full_Refund`, and `Change_Product_Variant` with no `asserts_mutation`)
-asserting READ@submit_reply returns 2.
 
 ---
 
-### CR-02: Threshold caps are global, not per-sub-type — out-of-flow offers authorized
+### CR-02: `collect()` was NOT refactored to use `_process_row()` — plan claim contradicts code
 
-**File:** `.claude/hooks/authorized_offer.py:137-153` and `:273-278`
-**Issue:**
-`THRESHOLD_CAPS` maps each percentage key to a single global cap, and the check loop
-validates every offered key against its own cap independently of `sub_type`:
+**File:** `scripts/test_tickets_run.py:459-508`
 
-```python
-for pct_key, entry in THRESHOLD_CAPS.items():
-    offered_val = offered.get(pct_key)
-    if offered_val is not None and offered_val > entry["cap"]:
-        return False, f"unauthorized:over_threshold:{entry['thr_id']}"
-```
+**Issue:** The 04-06-SUMMARY.md (line 63) states: *"`_process_row` extracted as shared coroutine:
+both `collect()` and `run()` call it."* The plan task (04-06-PLAN.md Task 2) explicitly requires:
+*"Prefer extracting the per-ticket body of `collect()` into a shared coroutine (`_process_row`)
+that BOTH `collect` and `run` call, rather than duplicating it."*
 
-Nothing ties a cap key to the sub-type's allowed offer dimension. Reproduced:
+The actual code shows `collect()` (lines 459–508) still contains its own full inline per-ticket
+pipeline (`fetch_conversation` → `fetch_selless_order` → `run_ai_team` → manual record assembly).
+`_process_row` (lines 1146–1196) exists and `run()` calls it, but `collect()` does not. The two
+implementations are near-identical today but can drift silently — any future field addition or bug
+fix applied to `_process_row` will not be reflected in `collect()`, and no test exercises both
+paths against each other.
 
-- `authorize_offer("Cancel_Order","F1",{"refund_pct":50},{in_warranty:True,prior_remediation:False})` → **`(True,"authorized:F1")`**.
-
-`Cancel_Order` is a ≤20% *retention* flow (THR-06) with no refund authority, yet a
-50% `refund_pct` is authorized because the global `refund_pct` cap is 50 and the loop
-never asks whether refund is a legal dimension for `Cancel_Order`. Same for
-`retention_pct` on a `Return`, or `comp_pct` on a `Partial_Refund`. The drafter's
-sub-type→THR table is advisory; the guard — the deterministic backstop meant to
-re-authorize regardless of the drafter's proposal — does not enforce that mapping.
-
-**Fix:** Gate each offered key by an allowed-dimension set per sub-type (fail-closed):
+**Fix:** Replace the inline per-ticket body in `collect()` with a call to `_process_row()`:
 
 ```python
-SUBTYPE_ALLOWED_OFFER_KEYS = {
-    "Cancel_Order": frozenset({"retention_pct"}),
-    "Partial_Refund": frozenset({"refund_pct", "discount_pct"}),
-    "Return": frozenset({"refund_pct", "discount_pct"}),
-    "Full_Refund": frozenset({"refund_pct"}),
-    "Ask_About_Delivery_Status": frozenset({"comp_pct"}),
-    # ... explicit per sub-type
-}
-allowed = SUBTYPE_ALLOWED_OFFER_KEYS.get(sub_type, frozenset())
-for pct_key in offered:
-    if pct_key not in allowed:
-        return False, f"unauthorized:offer_key_not_allowed:{pct_key}"
+async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> None:
+    env = _load_env_prd()
+    domain, key = env["FRESHDESK_DOMAIN"], env["FRESHDESK_API_KEY"]
+    cats = [only_cat] if only_cat else list(_CSV.keys())
+    records: list[dict] = []
+    sclient = httpx.AsyncClient(base_url=_SELLESS_BASE, timeout=20)
+    with httpx.Client() as client:
+        for cat in cats:
+            rows = _select(cat, per_cat, only_tid)
+            print(f"== {cat}: {len(rows)} ticket(s) ==", flush=True)
+            for i, row in enumerate(rows, 1):
+                tid = (row.get("Ticket ID") or "").strip()
+                if not tid:
+                    continue
+                rec = await _process_row(row, client, sclient, domain, key, cat)
+                records.append(rec)
+                await asyncio.sleep(0.3)  # see WR-01
+    await sclient.aclose()
+    with open(_DATA_PATH, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"DONE {len(records)} records -> {_DATA_PATH}", flush=True)
 ```
 
-Add tests proving `refund_pct` on `Cancel_Order`, `retention_pct` on `Return`, and
-`comp_pct` on `Partial_Refund` are all rejected.
+---
 
 ## Warnings
 
-### WR-01: Unknown / mistyped offered keys are silently ignored (not fail-closed)
+### WR-01: `time.sleep()` inside async functions blocks the entire event loop
 
-**File:** `.claude/hooks/authorized_offer.py:273-278`
-**Issue:** The cap loop iterates `THRESHOLD_CAPS` keys and reads them from `offered`.
-Any key in `offered` that is not a known cap key is never inspected. Reproduced:
-`authorize_offer("Partial_Refund","B7",{"refundpct":999,"refund_pct":50},...)` →
-`(True,"authorized:B7")` — the typo'd `refundpct:999` is silently dropped. For a
-fail-closed safety guard, an unrecognized offer dimension should escalate, not be
-ignored.
-**Fix:** After validating known caps, reject any offered key not in the known set:
-`unknown = set(offered) - set(THRESHOLD_CAPS); if unknown: return False, f"unauthorized:unknown_offer_key:{sorted(unknown)[0]}"`. (Combines naturally with CR-02's allowed-key gate.)
+**File:** `scripts/test_tickets_run.py:503, 1268`
 
-### WR-02: Negative percentages and bool values pass the threshold check
+**Issue:** Both `collect()` (line 503) and `run()` (line 1268) call `time.sleep(0.3)` inside
+`async def` coroutines driven by `asyncio.run()`. `time.sleep` is a blocking call that suspends
+the OS thread for 300 ms per ticket, preventing the event loop from driving any pending I/O
+(Selless response reads, subprocess stdout draining) during that window. For a 30-ticket run this
+wastes ~9 s of wall time with no yield to the event loop.
 
-**File:** `.claude/hooks/authorized_offer.py:277`
-**Issue:** The cap check is only `offered_val > entry["cap"]`. A negative value
-(`refund_pct: -10` → `-10 > 50` is False) passes, and `True` passes (`True == 1`).
-Reproduced: `{"refund_pct": -10}` → authorized; `{"refund_pct": True}` → authorized.
-A negative/bool value is a malformed payload that should fail-closed rather than be
-treated as in-bounds, and silently coercing `True` → 1% is a type-confusion footgun.
-**Fix:** Reject when `not isinstance(offered_val,(int,float))`, when
-`isinstance(offered_val,bool)`, or when `offered_val < 0`; return
-`unauthorized:invalid_offer_value:<key>`.
+**Fix:** Replace both occurrences with `await asyncio.sleep(0.3)`:
 
-### WR-03: `authorize_offer` raises `TypeError` on non-numeric offered values; safety depends entirely on the caller's try/except
-
-**File:** `.claude/hooks/authorized_offer.py:277` (raise site); `.claude/hooks/pre_send_guard.py:184-192` (caller)
-**Issue:** `authorize_offer("Partial_Refund","B7",{"refund_pct":"100"},...)` raises
-`TypeError: '>' not supported between instances of 'str' and 'int'`. The docstring
-promises a deterministic `(bool,str)` return, but the function can throw. Today this is
-contained because `pre_send_guard.main()` wraps the call in `except Exception → exit 2`.
-But `authorized_offer.py` is also documented as consumed by the drafter path (module
-docstring, "Consumed by ... drafter (plan 04-10)"), and any future caller that does not
-wrap it inherits a crash instead of an escalate. A safety-core decision function should
-never raise on caller-supplied data.
-**Fix:** Coerce/validate inside `authorize_offer` (see WR-02) so it returns
-`(False,"unauthorized:invalid_offer_value:<key>")` instead of raising. Keep the
-caller try/except as defense-in-depth.
-
-### WR-04: `_derive_operational_action` first-source-wins lets a benign top-level `customer_request` mask a nested escalating one
-
-**File:** `.claude/hooks/escalation_gate.py:165-187` (with `_iter_payload_sources` :190-196)
-**Issue:** The loop assigns `customer_request` from the **first** source that has it
-(top-level wins over nested `tool_result`/`result`/`output`). Reproduced:
-`{"customer_request":"Ask_About_Order","tool_result":{"customer_request":"Review"}}`
-→ `operational_action` not set → no escalation. If two stages disagree, the benign
-top-level value suppresses the escalating nested one. For a fail-closed additive gate
-the safe resolution is "any source says Review/Full_Refund/mutation → escalate", not
-"first source wins".
-**Fix:** Scan all sources; escalate if *any* yields an escalating `customer_request`
-or truthy `asserts_mutation`. For Rule 3, escalate if any source sets a
-mutation-asserting sub-type and no source explicitly sets `asserts_mutation=False`.
-
-## Info
-
-### IN-01: STUB(RD-Q2) eligibility defaults are optimistic — known deferred (plan 04-11)
-
-**File:** `.claude/hooks/authorized_offer.py:182-201` (`default_eligibility`), `:283`, `:292`; `.claude/hooks/pre_send_guard.py:181`
-**Issue:** `default_eligibility()` returns `in_warranty=True, prior_remediation=False,
-variant_in_stock=True`. When `pre_send_guard` receives an offer with no `eligibility`
-dict it falls back to these optimistic defaults (`pre_send_guard.py:181`), so an offer
-omitting the eligibility block is authorized as in-warranty/first-remediation. The
-in-function gates (`:283`, `:292`) do fail-closed when *individual* fields are missing,
-but the `default_eligibility()` fallback supplies the optimistic dict before those
-gates run. Documented RD-Q2 PoC stub, deferred to plan 04-11.
-**Fix:** None this phase (deferred by decision). When 04-11 wires Selless, replace the
-call-site fallback `offer.get("eligibility") or default_eligibility()` with a real
-lookup and consider escalating a no-eligibility-block offer instead of defaulting to
-optimism.
-
-### IN-02: STUB(RD-Q3) Full_Refund evidence-gating treated as satisfied — known deferred
-
-**File:** `.claude/hooks/authorized_offer.py:288-294`
-**Issue:** `Full_Refund` is documented as evidence-gated, but the §0 path treats
-evidence as sufficient this phase (only warranty + prior-remediation gates apply);
-A4/A5 authorize on `in_warranty=True` alone. The design relies on `escalation_gate`'s
-`operational_action` escalation for `Full_Refund` as the real protection — but see
-CR-01, where that escalation is currently bypassable, leaving this stub less protected
-than assumed. Known deferred to plan 04-11.
-**Fix:** None this phase; revisit alongside the CR-01 fix and 04-11 evidence wiring.
-
-### IN-03: Docs claim an offer block is "required" for informational replies, but the guard does not enforce it — contract drift
-
-**File:** `.claude/agents/drafter.md:212-223`, `.claude/skills/ground-and-draft/SKILL.md:217-226` vs `.claude/hooks/pre_send_guard.py:175-202`
-**Issue:** Drafter/skill docs state "the offer block is still required" for
-informational replies (empty `offered`). But `pre_send_guard` treats a missing offer
-block + no commitment term as a clean pass (`:196-202`); the inquiry-sub-type
-`authorized:no_offer` path in `authorize_offer` only runs when an offer block is
-actually supplied. The documented hard requirement is neither enforced nor necessary —
-harmless drift, but it can mislead maintainers into believing the guard validates
-inquiry offer blocks.
-**Fix:** Align the docs with enforced behavior (offer block optional when no commitment
-term is present).
+```python
+# In both collect() and run():
+await asyncio.sleep(0.3)
+```
 
 ---
 
-_Reviewed: 2026-06-04T02:05:00Z_
+### WR-02: `_apply_caps` misattributes dropped-row buckets under `--limit`-only mode
+
+**File:** `scripts/test_tickets_run.py:1135-1141`
+
+**Issue:** When `per_cat=None` and only `limit` is applied, the function trims from the tail of
+the input list. Given 5 Complaint rows followed by 5 Inquiry rows with `limit=4`, the dropped
+report is `{'Complaint': 1, 'Inquiry': 5}` — Inquiry appears nearly entirely dropped even though
+the cut is bucket-agnostic. The D-43 requirement is that drops are "logged (count + buckets)";
+a skewed report misleads operators reviewing the log.
+
+**Fix:** Either document this input-order dependency explicitly in the docstring, or apply a
+round-robin interleaving before trimming so the limit distributes evenly across buckets:
+
+```python
+# Apply global limit using round-robin to distribute evenly
+if limit is not None and len(selected) > limit:
+    by_b: dict[str, list[dict]] = {}
+    for r in selected:
+        by_b.setdefault(r.get("Level_in") or "unknown", []).append(r)
+    interleaved: list[dict] = []
+    queues = list(by_b.values())
+    while len(interleaved) < limit and any(queues):
+        for q in queues:
+            if q and len(interleaved) < limit:
+                interleaved.append(q.pop(0))
+    over = [r for q in queues for r in q]
+    for r in over:
+        b = r.get("Level_in") or "unknown"
+        dropped_report[b] = dropped_report.get(b, 0) + 1
+    selected = interleaved
+```
+
+---
+
+### WR-03: `_select()` opens a file handle without a context manager (resource leak)
+
+**File:** `scripts/test_tickets_run.py:451`
+
+**Issue:** `csv.DictReader(open(_CSV[category], newline="", encoding="utf-8"))` opens a file
+handle that is never explicitly closed. Under normal execution Python's reference counting closes
+it immediately after `list()` is evaluated, but under exception paths the handle leaks until GC
+runs. This is flagged as `ResourceWarning` in test mode (`-W error::ResourceWarning`).
+
+**Fix:**
+
+```python
+with open(_CSV[category], newline="", encoding="utf-8") as fh:
+    rows = list(csv.DictReader(fh))
+```
+
+---
+
+### WR-04: `--per-cat 0` and `--limit 0` are silently accepted and drop all tickets
+
+**File:** `scripts/test_tickets_run.py:1279-1306`
+
+**Issue:** `argparse` accepts any integer for `--per-cat` and `--limit`. Passing `0` causes
+`_apply_caps` to select zero rows and emit only a drop-count log. The user sees
+`"[run] Cap applied: 0 selected, N dropped"` and gets an empty xlsx — indistinguishable from a
+genuine zero-match result. A typo like `--per-cat 0` (intending `--per-cat 10`) silently
+processes nothing.
+
+**Fix:** Validate in `main()` after parsing:
+
+```python
+elif args.cmd == "run":
+    if args.per_cat is not None and args.per_cat <= 0:
+        print("ERROR: --per-cat must be >= 1.", file=sys.stderr)
+        sys.exit(1)
+    if args.limit is not None and args.limit <= 0:
+        print("ERROR: --limit must be >= 1.", file=sys.stderr)
+        sys.exit(1)
+    asyncio.run(run(args.ticket_id, args.list_path, args.limit, args.per_cat))
+```
+
+---
+
+## Info
+
+### IN-01: `category_hint or None` is a no-op in `_process_row`
+
+**File:** `scripts/test_tickets_run.py:1174`
+
+**Issue:** `run_ai_team(ticket, selless, category_hint or None)` — by the time execution reaches
+line 1174, `category_hint` is either a non-empty string or `None` (the empty-string case is
+already converted to `None` at line 1263). The `or None` suffix is therefore a no-op that adds
+visual noise and may mislead readers into thinking it performs a meaningful transformation.
+
+**Fix:** Remove the `or None`:
+
+```python
+ai = await run_ai_team(ticket, selless, category_hint)
+```
+
+---
+
+### IN-02: `test_apply_caps_limit` declares `tmp_path` fixture but never uses it
+
+**File:** `scripts/test_test_tickets_run.py:129`
+
+**Issue:** `def test_apply_caps_limit(tmp_path: Path)` requests the `tmp_path` pytest fixture but
+the test body creates no files and never references `tmp_path`. pytest injects and creates a
+temporary directory unconditionally, wasting I/O on every test run.
+
+**Fix:** Remove the `tmp_path` parameter:
+
+```python
+def test_apply_caps_limit() -> None:
+```
+
+---
+
+### IN-03: `_parse_draft_json` JSON extraction uses an O(n²) backward scan (pre-existing)
+
+**File:** `scripts/test_tickets_run.py:729-738`
+
+**Issue:** The final fallback in `_parse_draft_json` iterates `range(len(s), start, -1)` — up to
+n candidate slices of length 1…n — to find the largest balanced `{…}`. This pre-dates Plan 04-06
+and is not new code. For the harness's typical model output sizes (< 10 KB) this has no practical
+impact, but `_iter_json_objects` (lines 218–253) — added in an earlier pass — is an O(n) brace-
+matching alternative that already handles the same problem more correctly. The `draft` subcommand
+could adopt it instead of carrying this fallback forward.
+
+---
+
+_Reviewed: 2026-06-05T08:25:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_

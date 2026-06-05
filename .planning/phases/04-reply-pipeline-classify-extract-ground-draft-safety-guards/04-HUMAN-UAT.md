@@ -2,8 +2,8 @@
 status: partial
 phase: 04-reply-pipeline-classify-extract-ground-draft-safety-guards
 source: [04-VERIFICATION.md]
-started: 2026-06-04
-updated: 2026-06-04
+started: 2026-06-05T08:30:00Z
+updated: 2026-06-05T08:30:00Z
 ---
 
 ## Current Test
@@ -12,25 +12,32 @@ updated: 2026-06-04
 
 ## Tests
 
-### 1. Safety-contract D-13 → D-26 update (.claude/CLAUDE.md)
-expected: The `.claude/CLAUDE.md` "D-13 — Commitment language is blocked" section is updated to D-26 authorized-offer semantics (block UNAUTHORIZED offers; permit authorized templated offers within policy) so the always-on safety contract matches the implemented code (`pre_send_guard.py` docstring already says "D-26 SUPERSEDES D-13"). Enforcement is UNAFFECTED (hooks enforce D-26 regardless of the prose), but the contract text is stale.
-result: resolved (2026-06-04)
-note: User approved the safety-contract edit. The `.claude/CLAUDE.md` "D-13" section was replaced with the "D-26 — Unauthorized commitments are blocked; authorized templated offers are permitted" section, matching the implemented code. (First automated attempt was correctly blocked by the harness auto-mode classifier pending explicit user authorization, which was then given.)
-
-### 2. Live round-trip — authorized templated offer PASSES the guard
-expected: In a full Claude Code cs-agent-team session (real LLM), a within-policy templated offer (e.g. B7: 50% refund + 40% VIP discount on an in-warranty, first-remediation order) is drafted, the drafter emits a correctly-formatted `offer` block, and `pre_send_guard` lets `submit_reply` through (exit 0). Verified so far only via subprocess tests with hardcoded payloads, not an end-to-end LLM round-trip.
+### 1. Run `/test-ticket --id <id>` against one real ticket from uat_ticket.csv
+expected: test-tickets.xlsx written; terminal shows action=draft with non-empty body grounded on a real template phrase; no Freshdesk POST
 result: [pending]
+why_human: Requires live PROD Freshdesk GET + Selless read + real `claude --print` subprocess; cannot be validated without live credentials and running services.
 
-### 3. Live round-trip — Review / Full_Refund ticket NEVER reaches submit_reply
-expected: In a full session, a `Review` (or `Full_Refund`, or mutation-asserting change_request with no offer) ticket escalates via `escalation_gate.operational_action` and never produces a customer draft. CR-01 fix confirmed via subprocess (WRITE exit 1 → READ@submit_reply exit 2); needs confirmation in the real hook-dispatch chain with LLM output.
+### 2. Run a high-risk (refund/money) ticket via --id and inspect test-tickets.xlsx
+expected: AI output block shows action=draft with non-null escalation_hint whose reason contains 'high_risk' or equivalent; CS reply column present for side-by-side
+result: [pending]
+why_human: pytest mocks the pipeline; confirming the real team produces the correct advisory hint shape on live ticket data requires human eyes on xlsx output.
+
+### 3. Run a ticket with no order reference via --id; verify D-34 fallback in xlsx
+expected: Draft body uses verify-order or clarify-order-info language; no fabricated order number (ORD-XXXXX) in draft
+result: [pending]
+why_human: D-34 fallback is unit-tested in simulation (30/30 always-draft tests); live execution with real ticket data needs human confirmation.
 
 ## Summary
 
 total: 3
-passed: 1
+passed: 0
 issues: 0
-pending: 2
+pending: 3
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+> Superseded the prior (2026-06-04) D-26 authorized-offer UAT items — those guards were
+> RETIRED by the D-29/D-30 always-draft pivot (D-32 deleted the four guard hooks). The
+> three items above are the always-draft PoC's live-credential verification items.
