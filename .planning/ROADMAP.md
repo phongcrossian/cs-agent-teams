@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
 - [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
 - [ ] **Phase 7: Staged Rollout (5% → 100%)** - Controlled, quality-gated exposure scaling from 5% to full volume
-- [ ] **Phase 8: Ticket Re-Classification & FD Property Write-Back** - AI re-classifies each ticket and defines the core Freshdesk classification properties (Level_in, Customer_Request, Rootcause, Flow, Section_Flow) mapped to exact ticket_fields enums — DRY_RUN would-be update in PoC (live FD write-back deferred)
+- [x] **Phase 8: Ticket Re-Classification & FD Property Write-Back** - AI re-classifies each ticket and defines the core Freshdesk classification properties (Level_in, Customer_Request, Rootcause, Flow, Section_Flow) mapped to exact ticket_fields enums — DRY_RUN would-be update in PoC (live FD write-back deferred) (completed 2026-06-05)
 
 ## Phase Details
 
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
-| 8. Ticket Re-Classification & FD Property Write-Back | 0/2 | Planned | - |
+| 8. Ticket Re-Classification & FD Property Write-Back | 2/2 | Complete   | 2026-06-05 |
 
 ### Phase 8: Ticket Re-Classification & FD Property Write-Back
 
@@ -182,5 +182,5 @@ manual / out of scope for this phase.
      existing `submit_reply` chokepoint.
 
 **Plans**: 2 plans (2 waves; offline foundation → harness wiring)
-- [ ] 08-01-PLAN.md — Static ticket_fields enum loader (src/file_store/ticket_fields_store.py) + enum-validation/fd_property_update assembler (src/file_store/fd_classification.py); offline TDD; mirrors allowed-template-codes guard; empty-enum → unverifiable (Wave 1)
-- [ ] 08-02-PLAN.md — Wire fd_property_update into the harness: assemble in _process_row + render AI-vs-CS-gold side-by-side with per-field match + *_valid in build_xlsx; assert DRY_RUN (no PUT); gitignore test-tickets.xlsx (Wave 2)
+- [x] 08-01-PLAN.md — Static ticket_fields enum loader (src/file_store/ticket_fields_store.py) + enum-validation/fd_property_update assembler (src/file_store/fd_classification.py); offline TDD; mirrors allowed-template-codes guard; empty-enum → unverifiable (Wave 1)
+- [x] 08-02-PLAN.md — Wire fd_property_update into the harness: assemble in _process_row + render AI-vs-CS-gold side-by-side with per-field match + *_valid in build_xlsx; assert DRY_RUN (no PUT); gitignore test-tickets.xlsx (Wave 2)

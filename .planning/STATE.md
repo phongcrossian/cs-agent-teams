@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 /test-ticket command context gathered (D-41..D-45)
-last_updated: "2026-06-05T08:05:44.239Z"
-last_activity: 2026-06-05 -- Phase 04 execution started
+last_updated: "2026-06-05T10:19:09.953Z"
+last_activity: 2026-06-05 -- Phase 08 execution started
 progress:
-  total_phases: 7
-  completed_phases: 3
-  total_plans: 22
-  completed_plans: 21
-  percent: 43
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 24
+  completed_plans: 22
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** AI sends accurate, trustworthy customer email replies at scale so support volume grows without growing headcount linearly — answer quality is non-negotiable; nothing ships until it clears an evaluation bar.
-**Current focus:** Phase 04 — reply-pipeline-classify-extract-ground-draft-safety-guards
+**Current focus:** Phase 08 — ticket-re-classification-fd-property-write-back
 
 ## Current Position
 
-Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 04
-Last activity: 2026-06-05 -- Completed quick task 260605-mfi: FD props + cf_order Selless capture
+Phase: 08 (ticket-re-classification-fd-property-write-back) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 08
+Last activity: 2026-06-05 -- Phase 08 execution started
 
 Progress: [██████████] 100%
 
