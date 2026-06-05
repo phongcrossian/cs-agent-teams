@@ -32,6 +32,7 @@ Requirements for the initial release. Each maps to roadmap phases.
 - [x] **REP-03** *(reworded by D-29, 2026-06-04)*: AI drafts a reply by selecting the correct **template** (via Workflow/CODE-MAP) and filling it from **Selless order data (production)** + the ticket. Grounding = approved template + order data; mandatory inline citations no longer required (D-11 retired).
 - [x] **REP-04**: AI runs a self-critique pass scoring the draft against the quality rubric before any send
 - [x] **REP-05**: AI posts the approved reply into the correct existing Freshdesk ticket via API, idempotently (no duplicate sends)
+- [ ] **REP-06** *(added 2026-06-05, Phase 8)*: AI re-classifies the ticket and defines the **core Freshdesk classification properties** (Level_in, Customer_Request [nested], Rootcause, Flow, Section_Flow) by mapping its understanding to the **exact `ticket_fields` enum values**, validated against the allowed enum. Extends REP-01 from category-for-template-selection to the full core property set. **DRY_RUN would-be update in the PoC** — the live `PUT /tickets/{id}` write-back is DEFERRED (a NEW Freshdesk write path beyond `submit_reply`; DRY_RUN-gated, revisit before any live write).
 
 ### Safety & Rollout
 

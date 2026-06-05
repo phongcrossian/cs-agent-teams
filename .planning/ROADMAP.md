@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Offline Evaluation Harness (THE GATE)** - Score replies against a golden dataset on faithfulness/correctness; the bar that authorizes go-live
 - [ ] **Phase 6: Routing Gate, Monitoring & Kill-Switch** - Single chokepoint with deterministic bucketing + live dashboard and kill-switch in place before any live send
 - [ ] **Phase 7: Staged Rollout (5% → 100%)** - Controlled, quality-gated exposure scaling from 5% to full volume
+- [ ] **Phase 8: Ticket Re-Classification & FD Property Write-Back** - AI re-classifies each ticket and defines the core Freshdesk classification properties (Level_in, Customer_Request, Rootcause, Flow, Section_Flow) mapped to exact ticket_fields enums — DRY_RUN would-be update in PoC (live FD write-back deferred)
 
 ## Phase Details
 
@@ -144,3 +145,39 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
+
+### Phase 8: Ticket Re-Classification & FD Property Write-Back
+
+> **Scope note:** Re-classification is already in Phase-1 scope (REP-01). This phase extends it from
+> "pick the support category for template selection" to "define the full set of CORE Freshdesk
+> classification properties and prepare them for write-back into the ticket". Write-back is a NEW
+> Freshdesk write path beyond the `submit_reply` chokepoint — it is **DRY_RUN-gated** in the PoC
+> (classify + map + log a would-be update); the live `PUT /tickets/{id}` is DEFERRED. ⚠️ revisit
+> before enabling any live property write at 23k/week.
+
+**Goal**: Beyond drafting the customer reply, the Agent Team RE-CLASSIFIES each ticket and DEFINES the
+core Freshdesk classification properties — **Level_in, Customer_Request (nested), Rootcause, Flow,
+Section_Flow** — by mapping the AI's understanding (ticket body + Selless order data + Workflow/CODE-MAP)
+to the EXACT `ticket_fields` dropdown enum values, and emits a **DRY_RUN "would-be FD property update"**
+(classify → map → validate against enum → log to xlsx/jsonl). Produces and validates the mapping + the
+classified property set; the live FD write is deferred.
+**Mode:** mvp
+**Depends on**: Phase 4
+**Requirements**: REP-06
+**Scope boundary**: AI owns ONLY the core classification dropdowns above. Agent-workflow fields
+(Handler, SCE team, Call type, Request to SCE, Level_out, Package_status, Product_label/line, …) stay
+manual / out of scope for this phase.
+**Success Criteria** (what must be TRUE):
+  1. A static enum loader in the file-store exposes the FD `ticket_fields` choices (the nested
+     Level_in→Customer_Request taxonomy + Rootcause/Flow/Section_Flow), read from the committed snapshot
+     `freshdesk-ticket-fields.json` — no network at runtime.
+  2. The pipeline emits an `fd_property_update` block with a verbatim enum value per owned field,
+     grounded in ticket + Selless + CODE-MAP.
+  3. Every emitted value is validated against the allowed enum; an invalid/out-of-enum value is flagged
+     (never silently accepted) — same discipline as the allowed-template-codes anti-pattern guard.
+  4. The validation harness shows AI-defined properties vs CS gold FD `custom_fields` side-by-side with a
+     per-field match metric.
+  5. DRY_RUN only — no live `PUT /tickets/{id}` path; assert no Freshdesk write occurs beyond the
+     existing `submit_reply` chokepoint.
+
+**Plans**: TBD (run /gsd-plan-phase 8 to break down)

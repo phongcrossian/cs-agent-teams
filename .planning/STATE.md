@@ -82,6 +82,10 @@ Progress: [██████████] 100%
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 8 added (2026-06-05): Ticket Re-Classification & FD Property Write-Back — AI defines core FD classification properties (Level_in, Customer_Request, Rootcause, Flow, Section_Flow) mapped to exact ticket_fields enums; DRY_RUN would-be update, live PUT deferred. New requirement REP-06. Depends on Phase 4.
+
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
