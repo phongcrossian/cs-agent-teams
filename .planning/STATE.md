@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Phase 4 workflow-validation context captured (D-35..D-40)
-last_updated: "2026-06-05T02:08:58.119Z"
+last_updated: "2026-06-05T02:25:12.820Z"
 last_activity: 2026-06-05
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 21
-  completed_plans: 20
-  percent: 43
+  completed_plans: 21
+  percent: 57
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 
 Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-05
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Progress: [██████████] 95%
 | Phase 04 P02 | 410 | 3 tasks | 9 files |
 | Phase 04 P05 | 5 | 2 tasks | 3 files |
 | Phase 04 P03 | 20 | 2 tasks | 4 files |
+| Phase 04 P04 | 15 | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 04-05 skill rework
 - [Phase ?]: 04-05 skill rework
 - [Phase ?]: D-33 always-draft verified: all fixtures yield action=draft; deleted guard imports removed from scripts/
+- [Phase ?]: no-opus test scoped to claude-opus model string not bare word — cs-lead.md policy reminder allowed
+- [Phase ?]: drafter negative-KnowledgeMCP test dropped — drafter.md negates KnowledgeMCP correctly; positive file-store test covers D-31
 
 ### Pending Todos
 
@@ -163,6 +166,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T02:08:49.271Z
+Last session: 2026-06-05T02:23:59.357Z
 Stopped at: Phase 4 workflow-validation context captured (D-35..D-40)
 Resume file: None
