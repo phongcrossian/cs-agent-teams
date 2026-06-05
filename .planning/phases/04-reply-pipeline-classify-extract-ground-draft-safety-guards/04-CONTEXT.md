@@ -1,6 +1,6 @@
 # Phase 4: Reply Pipeline (Classify, Extract, Ground, Draft) + Safety Guards - Context
 
-**Gathered:** 2026-06-02 · **Re-homed:** 2026-06-03 (architecture pivot) · **Updated:** 2026-06-04 (PoC pivot D-29/D-30 — see top section)
+**Gathered:** 2026-06-02 · **Re-homed:** 2026-06-03 (architecture pivot) · **Updated:** 2026-06-04 (PoC pivot D-29/D-30) · **Updated:** 2026-06-05 (`/test-ticket` command — D-41..D-45, see section)
 **Status:** Ready for planning (RE-OPEN for code rework — see PIVOT below)
 **Canonical design:** `docs/specs/2026-06-02-cs-agent-team-design.md` (APPROVED — planner MUST read, but read through the D-29/D-30 delta)
 
@@ -107,6 +107,60 @@ re-populated before any AI-vs-CS comparison is meaningful. The harness has TWO e
 - How the real-team `collect()` path reports computed Properties back for the xlsx (verdict payload shape).
 - Whether to keep `draft()` as a debug shortcut or delete it once `collect()` is the validated path.
 </validation_decisions>
+
+<test_ticket_command_decisions>
+## `/test-ticket` COMMAND RE-DISCUSSION (2026-06-05) — D-41..D-45
+
+> Captured in a discuss-phase re-run focused on turning the working validation harness
+> (`scripts/test_tickets_run.py`) into a **clean, on-demand command for arbitrary tickets** —
+> run a single ticket by ID or a list from a CSV, drive them through the REAL agent-team, and
+> emit the same `test-tickets.xlsx`. These sit ON TOP of D-29..D-40 (locked policy + the validation
+> harness) and DO NOT re-decide them. Reuses: D-35 (real-team path), D-36 (CS = gold), D-37
+> (extended properties), D-39 (PROD strictly read-only + DRY_RUN), D-40 (checker reason in xlsx).
+> User priority restated: **làm đơn giản** — repackage the existing engine, don't rebuild it.
+
+**Data source confirmed:** the "FB Product" lookup = **Freshdesk** (ticket: Customer First Request =
+`description_text`, + first public **CS Agent reply**) **+ Selless PROD** (`api.selless.com`,
+read-only, resolve by human order code) for order/Properties. Same prod surface already wired (D-39).
+
+- **D-41 (locked) — Command form factor = Slash-command + CLI subcommand (engine in the CLI).**
+  Add a python subcommand `run` to `scripts/test_tickets_run.py` accepting `--id <ticket_id>` (single)
+  and `--list <csv>` (batch) — this is the reusable engine (headless/CI-safe). Add a **thin**
+  `.claude/commands/test-ticket.md` slash-command that dispatches to it so the user can type
+  `/test-ticket --id 33403` / `/test-ticket --list uat_ticket.csv` inside Claude Code. The slash file
+  holds NO logic — it shells into the CLI. `run` reuses the existing `collect()` real-team machinery
+  (D-35), then the existing `build_xlsx()`.
+- **D-42 (locked) — `--list` CSV schema = the `uat_ticket.csv` format.** Semicolon-delimited (`;`),
+  header `Level_in;Resolved date;Ticket ID`. The harness reads **`Ticket ID`** as the key, uses
+  **`Level_in`** as the category bucket (for grouping + `--per-cat`), and treats `Resolved date` as
+  informational only. (Reference file: `.../01-knowledge-survey-conflict-inventory/snapshots/confluence/ticket-sample/uat_ticket.csv`.)
+- **D-43 (locked) — Batch caps, no silent truncation.** `--list` supports `--limit N` (total cap)
+  and `--per-cat N` (per `Level_in` cap) with a **safe default** (e.g. 10/category) so a 4,500-row
+  file never silently fans out to thousands of real-team `claude` calls. Whatever is dropped by a cap
+  MUST be `log()`-ed (count + which buckets) — never silently truncated. `--id` runs exactly one.
+- **D-44 (locked) — Output = keep the current `test-tickets.xlsx` format.** 1 sheet per ticket,
+  property rows + CS-vs-AI side-by-side columns (D-37 extended set) + the per-ticket checker
+  reason/fix (D-40). Both `--id` and `--list` write to the same gitignored `test-tickets.xlsx`
+  (overwrite per run) — matches the user's "output ra giống file test-tickets.xlsx". Outputs ONLY to
+  the local gitignored xlsx + `.test-tickets-data.jsonl` (D-39); never POSTs to Freshdesk.
+- **D-45 (locked) — Properties scope = EXTENDED (D-37) unchanged.** Surface `Customer_Request`
+  sub-type, **template code**, `Flow`, `STEP`, `Rootcause`, `Resolution status`, plus the **Reply**
+  body — CS vs AI side-by-side. Binding match gate stays D-38 (template code + Reply); other columns
+  recorded + diff-noted for reference.
+
+### Claude's Discretion (`/test-ticket`)
+- Exact subcommand name (`run` vs reusing/renaming `collect`) and flag plumbing — keep `--id` and
+  `--list` as the public surface; reuse `collect()` internally.
+- Default cap values for `--limit`/`--per-cat` and the warn-threshold; the `.claude/commands/test-ticket.md`
+  wording and how it forwards args to the CLI.
+- Whether `--list` also accepts a plain one-`Ticket ID`-per-line file as a convenience in addition to
+  the `uat_ticket.csv` (`;`-delimited) format — pick the simplest robust parse.
+
+> **MUST honor the blocking "free-pick template" anti-pattern** (`.continue-here.md`): the `run` path
+> reuses the deterministic sub-type→allowed-codes map (`_SUBTYPE_TEMPLATES`, PASS-2). Do NOT introduce
+> a category-glob free-pick in the new command path.
+
+</test_ticket_command_decisions>
 
 > **ARCHITECTURE PIVOT (2026-06-03).** Phase 4 is now built as a **standard Claude Code agent team**
 > (`.claude/` with `agents/`, `skills/`, `hooks/`, `CLAUDE.md`, MCP wiring) running **locally first**
@@ -285,6 +339,12 @@ failing the D-26 test), NOT "0 refund/commitment words". Templated, in-threshold
 - `.cs-compare/<category>.json` — checker-agent inputs (AI-vs-CS per-ticket verdicts)
 - `src/config.py` — `selless_env` single source of truth (commit `1a0d66a`); `.env.prd` — Freshdesk PROD creds
 - `.continue-here.md` (this phase dir) — blocking anti-patterns + paused iter-4 state
+
+### `/test-ticket` command (D-41..D-45 — READ for the on-demand command)
+- `scripts/test_tickets_run.py` — add the `run --id / --list` subcommand (engine; reuses `collect()` + `build_xlsx()`)
+- `.claude/commands/test-ticket.md` — NEW thin slash-command wrapper that dispatches to the CLI (no logic)
+- `.planning/phases/01-knowledge-survey-conflict-inventory/snapshots/confluence/ticket-sample/uat_ticket.csv`
+  — the `--list` CSV format (`;`-delimited, header `Level_in;Resolved date;Ticket ID`)
 
 ### This phase's design (READ THROUGH THE D-29/D-30 DELTA)
 - `docs/specs/2026-06-02-cs-agent-team-design.md` — the approved agent-team architecture, `.claude/`

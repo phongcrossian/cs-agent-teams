@@ -273,3 +273,35 @@ at 1/30) — must re-populate via the real-team path before comparison is meanin
 - Checker agent count/shape + `.cs-compare` JSON schema.
 - Verdict payload shape for reporting computed Properties back to the xlsx.
 - Keep vs delete `draft()` once `collect()` is the validated path.
+
+---
+
+## Session 4 — `/test-ticket` command (2026-06-05)
+
+**Focus:** Turn the working harness (`scripts/test_tickets_run.py`) into an on-demand command — run a
+single ticket by ID or a list from CSV through the REAL agent-team → same `test-tickets.xlsx`.
+Priority: làm đơn giản (repackage, don't rebuild). Language: Vietnamese.
+
+**Data source confirmed:** "FB Product" = Freshdesk (Customer First Request + first CS reply) + Selless
+PROD (read-only) — same prod surface already wired (D-39).
+
+**Areas discussed & selections:**
+
+1. **Command form factor** — options: slash+CLI / CLI only / slash only.
+   → **Slash + CLI** (D-41). python `run --id/--list` engine + thin `.claude/commands/test-ticket.md` wrapper.
+2. **`--list` CSV format** — options: 1-col ticket_id / +expected / like `uat_ticket.csv`.
+   → **like `uat_ticket.csv`** (D-42). `;`-delimited `Level_in;Resolved date;Ticket ID`; key=Ticket ID, group by Level_in.
+3. **Output xlsx shape** — options: keep current / add Summary sheet / per-run filename.
+   → **Keep current format** (D-44). Both `--id`/`--list` overwrite `test-tickets.xlsx`; local + DRY_RUN only.
+4. **Properties scope** — options: extended D-37 / minimal 3-col.
+   → **Extended D-37** (D-45).
+5. **Batch caps** (follow-up — 4,500-row file risk) — options: `--limit`+`--per-cat` / run-all+confirm / no cap.
+   → **`--limit` + `--per-cat`, safe default, log dropped** (D-43). No silent truncation.
+
+### Claude's discretion (session 4)
+- Exact subcommand name (`run` vs reuse `collect`); default cap values + warn threshold.
+- `.claude/commands/test-ticket.md` wording / arg forwarding.
+- Whether `--list` also accepts a plain one-ID-per-line file in addition to the `uat_ticket.csv` format.
+
+> MUST honor the blocking "free-pick template" anti-pattern — reuse the deterministic
+> sub-type→allowed-codes map (`_SUBTYPE_TEMPLATES`, PASS-2) in the new command path.
