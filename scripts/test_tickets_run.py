@@ -102,9 +102,89 @@ def _load_env_prd() -> dict[str, str]:
     return env
 
 
+def _extract_fd_props(tj: dict) -> tuple[dict, str]:
+    """Extract Freshdesk ticket custom_fields into a clean fd_props dict and order code.
+
+    Pure function over a ticket JSON dict (no network calls).
+
+    - Maps suffixed cf_level_in* -> Level_in, cf_customer_request* -> Customer_Request
+      by PREFIX so numeric suffixes (e.g. cf_level_in285413) are handled robustly.
+    - Copies fixed cf keys to readable names.
+    - Copies standard status/priority/tags fields.
+    - Redacts PII: cf_email_support, cf_shophelp_discussion_link, and any value
+      containing '@' or 'http' is passed through redact_text() before storing.
+    - order_code (cf_order) is an order ref, not PII — left as-is.
+    - Returns ({}, "") for empty/missing custom_fields without raising.
+
+    MFI-5 safety: read-only, no Freshdesk POST path. D-04: PII redacted before storage.
+    """
+    cf = tj.get("custom_fields") or {}
+    if not cf and not tj.get("status") and not tj.get("priority") and not tj.get("tags"):
+        return {}, ""
+
+    fd_props: dict = {}
+    order_code: str = ""
+
+    # Extract order code (exact key, not PII)
+    order_code = (cf.get("cf_order") or "").strip()
+
+    # Prefix-matched suffixed keys (numeric suffix varies per FD instance)
+    for k, v in cf.items():
+        if k.startswith("cf_level_in"):
+            if v:
+                fd_props["Level_in"] = str(v)
+        elif k.startswith("cf_customer_request"):
+            if v:
+                fd_props["Customer_Request"] = str(v)
+
+    # Fixed cf key -> readable name mapping
+    _CF_FIXED_MAP = {
+        "cf_category": "Category",
+        "cf_rootcause": "Rootcause",
+        "cf_package_status": "Package_status",
+        "cf_product_label": "Product_label",
+        "cf_product_line": "Product_line",
+        "cf_flow": "Flow",
+        "cf_section_flow": "Section_Flow",
+    }
+    for cf_key, prop_name in _CF_FIXED_MAP.items():
+        v = cf.get(cf_key)
+        if v is not None and str(v).strip():
+            val = str(v)
+            # Redact PII: email (@) or URL (http) values
+            if "@" in val or "http" in val.lower():
+                val = redact_text(val)
+            fd_props[prop_name] = val
+
+    # PII-bearing fields — always redact
+    _PII_FIELDS = {
+        "cf_email_support": "Email_support",
+        "cf_shophelp_discussion_link": "Discussion_link",
+    }
+    for cf_key, prop_name in _PII_FIELDS.items():
+        v = cf.get(cf_key)
+        if v is not None and str(v).strip():
+            fd_props[prop_name] = redact_text(str(v))
+
+    # Standard ticket fields
+    status = tj.get("status")
+    if status is not None:
+        fd_props["Status"] = status
+
+    priority = tj.get("priority")
+    if priority is not None:
+        fd_props["Priority"] = priority
+
+    tags = tj.get("tags")
+    if tags is not None:
+        fd_props["Tags"] = ", ".join(tags) if isinstance(tags, list) else str(tags)
+
+    return fd_props, order_code
+
+
 def fetch_conversation(client: httpx.Client, domain: str, key: str, tid: str) -> dict:
-    """Return {customer_msg, cs_reply, error}. No raw PII printed by caller."""
-    out: dict[str, Any] = {"customer_msg": "", "cs_reply": "", "error": ""}
+    """Return {customer_msg, cs_reply, fd_props, fd_order_code, error}. No raw PII printed by caller."""
+    out: dict[str, Any] = {"customer_msg": "", "cs_reply": "", "fd_props": {}, "fd_order_code": "", "error": ""}
     try:
         t = client.get(f"https://{domain}/api/v2/tickets/{tid}",
                        auth=(key, "X"), timeout=30)
@@ -113,6 +193,9 @@ def fetch_conversation(client: httpx.Client, domain: str, key: str, tid: str) ->
             return out
         tj = t.json()
         out["customer_msg"] = (tj.get("description_text") or "").strip()[:6000]
+        fd_props, fd_order_code = _extract_fd_props(tj)
+        out["fd_props"] = fd_props
+        out["fd_order_code"] = fd_order_code
 
         conv = client.get(f"https://{domain}/api/v2/tickets/{tid}/conversations",
                           auth=(key, "X"), timeout=30)
@@ -1002,6 +1085,17 @@ def build_xlsx() -> None:
                     cell.fill = sev_fill
                 r += 1
 
+        # FD ticket properties section (MFI-4) — shows captured fd_props beside AI output
+        fd_p = rec.get("fd_props", {})
+        if fd_p:
+            r += 1
+            ws.cell(r, 1, "— FD ticket properties —").font = label_font
+            r += 1
+            for prop_name, prop_val in fd_p.items():
+                ws.cell(r, 1, prop_name)
+                ws.cell(r, 3, str(prop_val) if not isinstance(prop_val, str) else prop_val)
+                r += 1
+
         # Column D — D2 customer msg, D3 CS reply, D4 AI reply (labels prefixed)
         if dft:
             ai_reply = f"[ERROR] {dft.get('error')}" if dft.get("error") else (dft.get("reply") or "[empty]")
@@ -1139,8 +1233,11 @@ async def _process_row(
     record dict in the same shape collect() accumulates.
     """
     tid = (row.get("Ticket ID") or "").strip()
-    order_code = (row.get("Order") or "").strip()
     conv = fetch_conversation(client, domain, key, tid)
+    # Derive order_code: prefer CSV row's Order column; fall back to cf_order from FD payload.
+    # On --id path the synthetic row has no Order column, so fd_order_code from FD custom_fields
+    # drives the existing fetch_selless_order — no duplicate Selless logic (MFI-1).
+    order_code = (row.get("Order") or "").strip() or conv.get("fd_order_code", "")
     ticket = {
         "ticket_id": tid,
         "subject": row.get("Subject", ""),
@@ -1164,10 +1261,19 @@ async def _process_row(
         f"AI={act} cr={cr} tmpl={tc}",
         flush=True,
     )
+    # Build cs_props from row, then merge fd_props for keys the CSV did not supply (MFI-2).
+    # fd_props keys never overwrite non-empty CSV values — setdefault semantics.
+    rec_cs_props: dict = {k: row.get(k, "") for k in row.keys()}
+    fd_props = conv.get("fd_props", {})
+    for k, v in fd_props.items():
+        if not rec_cs_props.get(k):  # only fill in keys the CSV omitted / left empty
+            rec_cs_props[k] = v
+
     return {
         "category_file": cat_label,
         "ticket_id": tid,
-        "cs_props": {k: row.get(k, "") for k in row.keys()},
+        "cs_props": rec_cs_props,
+        "fd_props": fd_props,
         "customer_msg": conv["customer_msg"],
         "cs_reply": conv["cs_reply"],
         "fetch_error": conv["error"],
