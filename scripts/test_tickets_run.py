@@ -140,13 +140,39 @@ def _build_test_prompt(ticket: dict, selless: dict | None = None) -> str:
             "for the order number or checkout email. Never fabricate order facts.\n"
             "</selless_order_data>\n\n"
         )
+    # Deterministic sub-type -> allowed template codes (honors the blocking
+    # "free-pick template" anti-pattern: in headless 1-turn the model cannot run
+    # subtype_to_code(), so the allowed set is injected and the code MUST come
+    # from it for the classified sub-type — never invented, never cross-family).
+    codes_map = "\n".join(
+        f"  {st}: {', '.join(codes) if codes else '(NO template — use a clarify/none flow)'}"
+        for st, (codes, _files) in sorted(_SUBTYPE_TEMPLATES.items())
+    )
     return (
         "Process this customer support ticket through the full cs-agent-team pipeline "
         "(classify -> extract -> ground -> draft -> self-critique). The pipeline is "
         "ALWAYS-DRAFT (D-33): you ALWAYS return action=\"draft\" with a ready-to-send reply. "
         "There is NO escalate verdict. Ground the reply ONLY in the local file-store template "
         "you select (by Customer_Request sub-type) + the Selless order data below (D-29/D-31); never "
-        "fabricate order facts (D-34). Return EXACTLY ONE JSON object with BOTH your "
+        "fabricate order facts (D-34).\n\n"
+        "HARD CONSTRAINTS (CS-agent handling is the gold standard — match it):\n"
+        "1) TEMPLATE FAMILY — after you set customer_request, template_code MUST be exactly one "
+        "code from the ALLOWED list for that sub-type below (verbatim, e.g. \"B2\", \"G4\"). "
+        "NEVER invent a code and NEVER use a code from another family (a G-code is shipping/"
+        "delivery; an F-code is cancellation; do not mix). If the sub-type has no template, say so.\n"
+        "2) SELLESS-FIRST BRANCH — read po_status and the delivery status from the Selless data "
+        "FIRST and let it pick the flow/code: NEW/PROCESSING (not yet shipped) -> G2; "
+        "TO/TA/in-transit -> G4 (neutral) or G5 (angry); DELIVERED -> delivered/in-transit update "
+        "(or G10 if the customer says not received). Do not default to G2.\n"
+        "3) FIT/SIZE COMPLAINT on a delivered item within guarantee -> customer_request = "
+        "\"Replace\" (offer free replacement, keep items, ask for measurements if missing) — NOT "
+        "Return (money-back only when the customer explicitly demands it) and NOT "
+        "Change_Product_Variant (pre-delivery only).\n"
+        "4) VERIFY CLAIM vs ORDER — if the customer claims a wrong item/variant, compare against "
+        "the Selless ordered variant before classifying; if the order shows they received what they "
+        "ordered, do not treat it as a fulfillment error.\n\n"
+        "ALLOWED TEMPLATE CODES BY SUB-TYPE:\n" + codes_map + "\n\n"
+        "Return EXACTLY ONE JSON object with BOTH your "
         "classification properties AND your final draft verdict:\n\n"
         "{\n"
         '  "properties": {\n'
@@ -804,11 +830,17 @@ def build_xlsx() -> None:
             ws[c].font = hdr_font
             ws[c].fill = hdr_fill
 
-        # AI value counterparts for the CS property rows
+        # AI value counterparts for the CS property rows (D-37 side-by-side compare)
         ai_for_cs = {
             "Customer_Request": ai.get("customer_request", ""),
             "Order": ai.get("order_ref", ""),
             "Product_line": ai.get("product_line", ""),
+            "Flow": ai.get("flow", ""),
+            "STEP": ai.get("step", ""),
+            "Section_Flow": ai.get("flow", ""),
+            "Rootcause": ai.get("rootcause", ""),
+            "Rootcause_type": ai.get("rootcause", ""),
+            "Resolution status": ai.get("resolution_status", ""),
         }
 
         # Build the ordered, non-empty CS property rows
@@ -844,15 +876,23 @@ def build_xlsx() -> None:
                 ("AI: live Selless data", "yes" if dft.get("selless_used") else "no"),
             ]
         else:
+            hint = verdict.get("escalation_hint")
             ai_rows = [
                 ("AI: category", ai.get("category", "")),
                 ("AI: customer_request", ai.get("customer_request", "")),
                 ("AI: confidence", ai.get("confidence", "")),
+                ("AI: template_code", ai.get("template_code", "") or verdict.get("template_code", "")),
+                ("AI: flow", ai.get("flow", "")),
+                ("AI: step", ai.get("step", "")),
+                ("AI: rootcause", ai.get("rootcause", "")),
+                ("AI: resolution_status", ai.get("resolution_status", "")),
                 ("AI: order_ref", ai.get("order_ref", "")),
                 ("AI: issue_type", ai.get("issue_type", "")),
                 ("AI: high_risk", str(ai.get("high_risk", ""))),
+                ("AI: Selless grounded", "yes" if rec.get("selless_order") else "no"),
                 ("AI: verdict_action", verdict.get("action", "")),
-                ("AI: escalate_reason", verdict.get("reason", "")),
+                ("AI: escalation_hint",
+                 json.dumps(hint, ensure_ascii=False) if hint else "(none)"),
             ]
         for name, val in ai_rows:
             ws.cell(r, 1, name).font = label_font
