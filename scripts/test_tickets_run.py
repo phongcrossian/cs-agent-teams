@@ -116,14 +116,38 @@ def fetch_conversation(client: httpx.Client, domain: str, key: str, tid: str) ->
 # AI agent team — real cs-lead via claude CLI, combined properties+verdict prompt
 # ---------------------------------------------------------------------------
 
-def _build_test_prompt(ticket: dict) -> str:
+def _build_test_prompt(ticket: dict, selless: dict | None = None) -> str:
     body = redact_text(ticket.get("body", ""))
     subject = redact_text(ticket.get("subject", ""))
     order_ref = redact_text(ticket.get("order_ref", ""))
+    # D-34: real Selless order data grounds the reply (whitelisted fields only).
+    # When present, the AI MUST use it (status/tracking/variant) and must NOT ask
+    # the customer for the order number or fabricate order facts.
+    if selless:
+        selless_block = (
+            "<selless_order_data>\n"
+            "REAL order data resolved from Selless (production) for this ticket. Treat as ground "
+            "truth and fill the template from it (status, tracking, variant, amounts). Do NOT ask "
+            "the customer for their order number — you already have the order.\n"
+            f"{json.dumps(selless, ensure_ascii=False)}\n"
+            "</selless_order_data>\n\n"
+        )
+    else:
+        selless_block = (
+            "<selless_order_data>\n"
+            "No Selless order could be resolved for this ticket (empty/unknown order code). Per D-34, "
+            "treat this as a signal: draft a verify-order / clarify-order-info reply that politely asks "
+            "for the order number or checkout email. Never fabricate order facts.\n"
+            "</selless_order_data>\n\n"
+        )
     return (
         "Process this customer support ticket through the full cs-agent-team pipeline "
-        "(classify -> extract -> ground -> draft -> self-critique) and return EXACTLY ONE "
-        "JSON object with BOTH your classification properties AND your final verdict:\n\n"
+        "(classify -> extract -> ground -> draft -> self-critique). The pipeline is "
+        "ALWAYS-DRAFT (D-33): you ALWAYS return action=\"draft\" with a ready-to-send reply. "
+        "There is NO escalate verdict. Ground the reply ONLY in the local file-store template "
+        "you select (by Customer_Request sub-type) + the Selless order data below (D-29/D-31); never "
+        "fabricate order facts (D-34). Return EXACTLY ONE JSON object with BOTH your "
+        "classification properties AND your final draft verdict:\n\n"
         "{\n"
         '  "properties": {\n'
         '    "category": "complaint|change_request|inquiry|other",\n'
@@ -135,41 +159,125 @@ def _build_test_prompt(ticket: dict) -> str:
         '    "order_ref": "<extracted order ref or empty>",\n'
         '    "issue_type": "<short issue type>",\n'
         '    "product_line": "<if determinable, else empty>",\n'
+        '    "template_code": "<the file-store template code you used, verbatim, e.g. B7/G2/F23; '
+        'empty only if the sub-type has no template>",\n'
+        '    "flow": "<workflow/flow name if determinable, else empty>",\n'
+        '    "step": "<workflow step if determinable, else empty>",\n'
+        '    "rootcause": "<root cause if determinable, else empty>",\n'
+        '    "resolution_status": "<resolution status if determinable, else empty>",\n'
         '    "high_risk": true|false\n'
         "  },\n"
-        '  "verdict": {"action":"draft","body":"...","citations":[{"id":"KB-1"}]}  '
-        '|  {"action":"escalate","reason":"...","signals":{}}\n'
+        '  "verdict": {"action":"draft","body":"<full customer reply text>",'
+        '"template_code":"<same code as properties.template_code>",'
+        '"escalation_hint": null  '
+        '/* or {"reason":"money|legal|injection|low_confidence|missing_key","signals":{}} '
+        'as ADVISORY only — it NEVER suppresses the draft */}\n'
         "}\n\n"
         f"ticket_id: {ticket.get('ticket_id', 'unknown')}\n"
         f"<ticket_metadata>\nsubject: {subject}\norder_ref: {order_ref}\n</ticket_metadata>\n\n"
+        f"{selless_block}"
         f"<ticket_body>\n{body}\n</ticket_body>\n"
     )
 
 
+def _iter_json_objects(text: str):
+    """Yield every top-level balanced {...} block in *text*, parsed as JSON.
+
+    Robust to markdown ```json fences and surrounding prose: the headless model
+    often returns a narrative plus a fenced/embedded JSON object rather than a
+    bare object. Brace-matching (string/escape aware) finds each candidate.
+    """
+    depth = 0
+    start = -1
+    in_str = False
+    esc = False
+    for i, ch in enumerate(text):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    blob = text[start:i + 1]
+                    try:
+                        yield json.loads(blob)
+                    except json.JSONDecodeError:
+                        pass
+                    start = -1
+
+
 def _parse_combined(raw_output: str) -> dict:
-    """Return {properties: dict, verdict: dict}. Fail-closed verdict on parse failure."""
+    """Return {properties: dict, verdict: dict}.
+
+    Always-draft (D-33): on a parse miss the verdict falls soft to
+    action=draft with a parse_error hint (handled by the caller / _parse_verdict).
+    The model's reply (claude --print --output-format json) wraps the model text
+    in outer["result"]; that text may contain prose + a fenced JSON object, so we
+    scan all balanced objects and pick the ones carrying our contract keys.
+    """
     properties: dict = {}
     verdict: dict | None = None
+
+    # 1. Unwrap the claude --print JSON envelope to get the model's text.
+    inner_text = raw_output
     try:
         outer = json.loads(raw_output.strip())
-        inner = outer.get("result") if isinstance(outer, dict) else None
-        obj = json.loads(inner.strip()) if isinstance(inner, str) else (
-            inner if isinstance(inner, dict) else None)
-        if isinstance(obj, dict):
+        if isinstance(outer, dict) and isinstance(outer.get("result"), str):
+            inner_text = outer["result"]
+        elif isinstance(outer, dict) and "result" in outer:
+            inner_text = json.dumps(outer["result"])
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Fast path: the whole inner text is a bare contract object.
+    for candidate in (inner_text.strip(),):
+        try:
+            obj = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and ("properties" in obj or "action" in obj or "verdict" in obj):
             if isinstance(obj.get("properties"), dict):
                 properties = obj["properties"]
             if isinstance(obj.get("verdict"), dict):
                 verdict = obj["verdict"]
             elif "action" in obj:
                 verdict = obj
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        pass
+            if properties or verdict:
+                return {"properties": properties, "verdict": verdict or _parse_verdict(raw_output)}
+
+    # 3. Robust path: scan every embedded JSON object (handles fences + prose).
+    for obj in _iter_json_objects(inner_text):
+        if not isinstance(obj, dict):
+            continue
+        if not properties and isinstance(obj.get("properties"), dict):
+            properties = obj["properties"]
+        if verdict is None and isinstance(obj.get("verdict"), dict):
+            verdict = obj["verdict"]
+        # A combined object that itself is the verdict (has action/body).
+        if verdict is None and obj.get("action") == "draft":
+            verdict = obj
+        # A standalone properties object (has customer_request/category).
+        if not properties and ("customer_request" in obj or "category" in obj) and "action" not in obj:
+            properties = obj
+
     if verdict is None:
-        verdict = _parse_verdict(raw_output)  # robust fallback scan
+        verdict = _parse_verdict(raw_output)  # always-draft fail-soft
     return {"properties": properties, "verdict": verdict}
 
 
-async def run_ai_team(ticket: dict) -> dict:
+async def run_ai_team(ticket: dict, selless: dict | None = None) -> dict:
     """Run the real cs-agent-team on *ticket*; return {properties, verdict}.
 
     D-33 always-draft: verdict is always action=draft. On cli_error or injection,
@@ -193,7 +301,7 @@ async def run_ai_team(ticket: dict) -> dict:
             stderr=asyncio.subprocess.PIPE,
             cwd=str(_REPO_ROOT),
         )
-        out_b, err_b = await proc.communicate(input=_build_test_prompt(ticket).encode())
+        out_b, err_b = await proc.communicate(input=_build_test_prompt(ticket, selless).encode())
         if proc.returncode != 0:
             # D-33: cli_error → always-draft with advisory hint, never escalate=no-draft
             return {"properties": {}, "verdict": {
@@ -231,6 +339,7 @@ async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> N
     domain, key = env["FRESHDESK_DOMAIN"], env["FRESHDESK_API_KEY"]
     cats = [only_cat] if only_cat else list(_CSV.keys())
     records: list[dict] = []
+    sclient = httpx.AsyncClient(base_url=_SELLESS_BASE, timeout=20)  # D-34 Selless grounding
     with httpx.Client() as client:
         for cat in cats:
             rows = _select(cat, per_cat, only_tid)
@@ -240,13 +349,16 @@ async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> N
                 if not tid:
                     continue
                 conv = fetch_conversation(client, domain, key, tid)
+                order_code = (row.get("Order") or "").strip()
                 ticket = {
                     "ticket_id": tid,
                     "subject": row.get("Subject", ""),
-                    "order_ref": row.get("Order", ""),
+                    "order_ref": order_code,
                     "body": conv["customer_msg"],
                 }
-                ai = await run_ai_team(ticket)
+                # D-34: resolve real order data by code on api.selless.com (read-only).
+                selless = await fetch_selless_order(sclient, order_code) if order_code else None
+                ai = await run_ai_team(ticket, selless)
                 rec = {
                     "category_file": cat,
                     "ticket_id": tid,
@@ -254,17 +366,20 @@ async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> N
                     "customer_msg": conv["customer_msg"],
                     "cs_reply": conv["cs_reply"],
                     "fetch_error": conv["error"],
+                    "selless_order": selless,
                     "ai_properties": ai["properties"],
                     "ai_verdict": ai["verdict"],
                 }
                 records.append(rec)
                 act = ai["verdict"].get("action")
                 cr = ai["properties"].get("customer_request", "?")
+                tc = ai["properties"].get("template_code") or ai["verdict"].get("template_code", "?")
                 # No raw PII to stdout — only ids/lengths/labels
                 print(f"[{cat} {i}/{len(rows)}] tid={tid} fetch={'ok' if not conv['error'] else conv['error']} "
                       f"msg_len={len(conv['customer_msg'])} csreply_len={len(conv['cs_reply'])} "
-                      f"AI={act} ai_cr={cr}", flush=True)
+                      f"selless={'Y' if selless else 'n'} AI={act} ai_cr={cr} tmpl={tc}", flush=True)
                 time.sleep(0.3)
+    await sclient.aclose()
     with open(_DATA_PATH, "w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
