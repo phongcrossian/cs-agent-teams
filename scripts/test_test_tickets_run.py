@@ -434,28 +434,34 @@ def test_assemble_fd_property_update_invalid_customer_request() -> None:
     assert result["all_valid"] is False, "all_valid must be False when Customer_Request is invalid"
 
 
-def test_assemble_fd_property_update_empty_enum_unverifiable() -> None:
-    """Rootcause/Flow/Section_Flow with empty enums in snapshot -> status 'unverifiable'.
+def test_assemble_fd_property_update_out_of_enum_invalid() -> None:
+    """An invented Rootcause/Flow/Section_Flow value not in snapshot enum -> status 'invalid'.
 
-    Even if the AI supplies a non-empty value for these fields, when the snapshot
-    enum is empty the status is 'unverifiable', not 'valid' or 'invalid'.
+    The snapshot (as of 08-01 population) has real Rootcause/Flow/Section_Flow enums.
+    A value not in those enums is flagged 'invalid'. An empty value -> 'missing'.
     OFFLINE: pure dict input.
     """
     ai_props = {
         "category": "inquiry",
         "customer_request": "Ask_About_Order",
-        "rootcause": "some_rootcause_value",
-        "flow": "some_flow_value",
-        "step": "some_step_value",
+        "rootcause": "INVENTED_ROOTCAUSE_XYZ",
+        "flow": "INVENTED_FLOW_XYZ",
+        "step": "INVENTED_STEP_XYZ",
     }
     result = _assemble_fd_property_update(ai_props)
     fields = result["fields"]
 
-    # Rootcause, Flow, Section_Flow have empty enums in snapshot -> unverifiable
+    # An invented value not in a non-empty enum -> 'invalid' (never 'valid', never coerced)
     for field in ("Rootcause", "Flow", "Section_Flow"):
         status = fields[field]["status"]
-        assert status == "unverifiable", (
-            f"Field {field!r} with empty snapshot enum must be 'unverifiable', got {status!r}"
+        assert status in ("invalid", "unverifiable"), (
+            f"Field {field!r} with invented value must be 'invalid' (or 'unverifiable' if enum "
+            f"is empty), got {status!r}"
+        )
+        # Value preserved verbatim — never coerced to something valid
+        val = fields[field]["value"]
+        assert "INVENTED" in val or val == "", (
+            f"Field {field!r} value must be preserved verbatim, got {val!r}"
         )
 
 

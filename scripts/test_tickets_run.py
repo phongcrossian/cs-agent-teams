@@ -38,6 +38,11 @@ _REPO_ROOT = Path(__file__).parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from src.file_store.fd_classification import (  # noqa: E402
+    build_fd_property_update,
+    OWNED_FIELDS,
+)
+
 # Reuse the production runner machinery (redaction, pre-screen, CLI invoke, parse).
 # D-32: _post_screen_draft, _sanitize_ticket_id, _state_file_path removed (deleted guard hooks gone).
 # D-33: verdict is always action=draft; no escalate=no-draft path.
@@ -180,6 +185,92 @@ def _extract_fd_props(tj: dict) -> tuple[dict, str]:
         fd_props["Tags"] = ", ".join(tags) if isinstance(tags, list) else str(tags)
 
     return fd_props, order_code
+
+
+# ---------------------------------------------------------------------------
+# FD re-classification helpers (08-02) — pure functions, no network calls
+# ---------------------------------------------------------------------------
+
+# Map AI category label -> FD Level_in macro key (snapshot macro labels)
+_CATEGORY_TO_LEVEL_IN: dict[str, str] = {
+    "complaint": "Complaint",
+    "change_request": "Change_Request",
+    "inquiry": "Inquiry",
+}
+
+
+def _assemble_fd_property_update(ai_props: dict) -> dict:
+    """Derive Level_in from AI category and assemble an advisory fd_property_update.
+
+    Thin adapter between the AI output (lowercase snake_case category) and
+    build_fd_property_update (which expects level_in/customer_request/rootcause/
+    flow/section_flow keys).
+
+    - Derives Level_in from ai_props["category"] using _CATEGORY_TO_LEVEL_IN map.
+    - Passes the normalized dict into build_fd_property_update.
+    - Result carries only OWNED_FIELDS (Level_in, Customer_Request, Rootcause,
+      Flow, Section_Flow) — never out-of-scope fields.
+    - Advisory/additive only (D-33): never alters the reply path, never posts to FD.
+
+    OFFLINE: pure dict input, no network.
+    """
+    category = (ai_props.get("category") or "").strip().lower()
+    level_in = _CATEGORY_TO_LEVEL_IN.get(category, "")
+
+    normalized: dict = {
+        "level_in": level_in,
+        "customer_request": (ai_props.get("customer_request") or "").strip(),
+        "rootcause": (ai_props.get("rootcause") or "").strip(),
+        "flow": (ai_props.get("flow") or "").strip(),
+        # section_flow from ai_props if present; fall back to step
+        "section_flow": (ai_props.get("section_flow") or ai_props.get("step") or "").strip(),
+    }
+    return build_fd_property_update(normalized)
+
+
+def _fd_field_match(fd_update: dict, fd_props: dict) -> dict:
+    """Return a per-owned-field match dict comparing AI values to CS gold fd_props.
+
+    For each field in OWNED_FIELDS:
+      - ai_value: the verbatim value from fd_update["fields"][field]["value"]
+      - cs_gold:  the value from fd_props[field] (None if absent)
+      - match:    True / False / None
+          True  — ai_value == cs_gold (case-insensitive, both non-empty)
+          False — both present but differ (case-insensitive)
+          None  — cs_gold absent (field not in fd_props) -> status="no_gold"
+      - status:   "match" / "differ" / "no_gold"
+
+    Out-of-scope fields present in fd_props (e.g. Package_status) are NOT added.
+    Fields absent from fd_update["fields"] are treated as missing AI value.
+
+    OFFLINE: pure dict comparison, no network.
+    """
+    result: dict = {}
+    fields = (fd_update or {}).get("fields", {})
+
+    for field in OWNED_FIELDS:
+        field_entry = fields.get(field, {})
+        ai_value: str = (field_entry.get("value") or "").strip()
+
+        if field not in fd_props:
+            result[field] = {
+                "ai_value": ai_value,
+                "cs_gold": None,
+                "match": None,
+                "status": "no_gold",
+            }
+        else:
+            cs_gold_raw = fd_props[field]
+            cs_gold = (str(cs_gold_raw) if cs_gold_raw is not None else "").strip()
+            matched = ai_value.lower() == cs_gold.lower() if ai_value and cs_gold else False
+            result[field] = {
+                "ai_value": ai_value,
+                "cs_gold": cs_gold,
+                "match": matched,
+                "status": "match" if matched else "differ",
+            }
+
+    return result
 
 
 def fetch_conversation(client: httpx.Client, domain: str, key: str, tid: str) -> dict:
@@ -1271,6 +1362,11 @@ async def _process_row(
         if not rec_cs_props.get(k):  # only fill in keys the CSV omitted / left empty
             rec_cs_props[k] = v
 
+    # 08-02: assemble advisory fd_property_update from AI classification (additive; D-33).
+    # This is purely additive — does NOT change the verdict, draft, or reply path.
+    fd_update = _assemble_fd_property_update(ai["properties"])
+    fd_match = _fd_field_match(fd_update, fd_props)
+
     return {
         "category_file": cat_label,
         "ticket_id": tid,
@@ -1282,6 +1378,8 @@ async def _process_row(
         "selless_order": selless,
         "ai_properties": ai["properties"],
         "ai_verdict": ai["verdict"],
+        "fd_property_update": fd_update,
+        "fd_field_match": fd_match,
     }
 
 
