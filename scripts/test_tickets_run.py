@@ -87,6 +87,12 @@ def _load_env_prd() -> dict[str, str]:
             if alt.exists():
                 candidate = alt
                 break
+    if not candidate.exists():
+        raise FileNotFoundError(
+            f".env.prd not found in {_REPO_ROOT} or any parent directory. "
+            "Copy it from the main repo root or set FRESHDESK_DOMAIN / "
+            "FRESHDESK_API_KEY in your environment."
+        )
     env: dict[str, str] = {}
     for line in candidate.read_text().splitlines():
         line = line.strip()
@@ -470,36 +476,11 @@ async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> N
                 tid = (row.get("Ticket ID") or "").strip()
                 if not tid:
                     continue
-                conv = fetch_conversation(client, domain, key, tid)
-                order_code = (row.get("Order") or "").strip()
-                ticket = {
-                    "ticket_id": tid,
-                    "subject": row.get("Subject", ""),
-                    "order_ref": order_code,
-                    "body": conv["customer_msg"],
-                }
-                # D-34: resolve real order data by code on api.selless.com (read-only).
-                selless = await fetch_selless_order(sclient, order_code) if order_code else None
-                ai = await run_ai_team(ticket, selless, cat)
-                rec = {
-                    "category_file": cat,
-                    "ticket_id": tid,
-                    "cs_props": {k: row.get(k, "") for k in row.keys()},
-                    "customer_msg": conv["customer_msg"],
-                    "cs_reply": conv["cs_reply"],
-                    "fetch_error": conv["error"],
-                    "selless_order": selless,
-                    "ai_properties": ai["properties"],
-                    "ai_verdict": ai["verdict"],
-                }
+                # Shared per-ticket pipeline (D-34 Selless grounding + DRY_RUN ai team).
+                # collect() and run() both call _process_row so the two paths cannot drift.
+                print(f"[{cat} {i}/{len(rows)}]", end=" ", flush=True)
+                rec = await _process_row(row, client, sclient, domain, key, cat)
                 records.append(rec)
-                act = ai["verdict"].get("action")
-                cr = ai["properties"].get("customer_request", "?")
-                tc = ai["properties"].get("template_code") or ai["verdict"].get("template_code", "?")
-                # No raw PII to stdout — only ids/lengths/labels
-                print(f"[{cat} {i}/{len(rows)}] tid={tid} fetch={'ok' if not conv['error'] else conv['error']} "
-                      f"msg_len={len(conv['customer_msg'])} csreply_len={len(conv['cs_reply'])} "
-                      f"selless={'Y' if selless else 'n'} AI={act} ai_cr={cr} tmpl={tc}", flush=True)
                 time.sleep(0.3)
     await sclient.aclose()
     with open(_DATA_PATH, "w", encoding="utf-8") as f:
