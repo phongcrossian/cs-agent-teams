@@ -38,19 +38,18 @@ _REPO_ROOT = Path(__file__).parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Reuse the production runner machinery (redaction, pre-screen, CLI invoke, parse, post-screen).
+# Reuse the production runner machinery (redaction, pre-screen, CLI invoke, parse).
+# D-32: _post_screen_draft, _sanitize_ticket_id, _state_file_path removed (deleted guard hooks gone).
+# D-33: verdict is always action=draft; no escalate=no-draft path.
 from scripts.cs_team_demo import (  # noqa: E402
     _CLAUDE_CLI,
     _parse_verdict,
-    _post_screen_draft,
     _pre_screen_ticket,
-    _sanitize_ticket_id,
-    _state_file_path,
     redact_text,
     settings,
 )
 
-import uuid  # noqa: E402
+import uuid  # noqa: E402 — still used for unique run IDs in run_ai_team
 
 _TICKET_DIR = _REPO_ROOT / ".planning" / "phases" / \
     "01-knowledge-survey-conflict-inventory" / "snapshots" / "confluence" / "ticket-sample"
@@ -171,18 +170,21 @@ def _parse_combined(raw_output: str) -> dict:
 
 
 async def run_ai_team(ticket: dict) -> dict:
-    """Run the real cs-agent-team on *ticket*; return {properties, verdict}."""
+    """Run the real cs-agent-team on *ticket*; return {properties, verdict}.
+
+    D-33 always-draft: verdict is always action=draft. On cli_error or injection,
+    an advisory escalation_hint is attached — the draft is still returned.
+    D-32: CS_RUN_ID, _state_file_path, and _post_screen_draft are GONE (deleted guard hooks).
+    D-39: DRY_RUN only — never posts to Freshdesk.
+    """
     assert settings.dry_run, "FATAL: settings.dry_run is False — aborting (no live posts allowed)."
 
-    # D-14 mandatory pre-screen (mirrors run_ticket)
+    # D-14 advisory pre-screen (mirrors run_ticket — advisory under D-30, never blocks draft)
     is_inj, reason = _pre_screen_ticket(ticket)
-    if is_inj:
-        return {"properties": {"high_risk": True},
-                "verdict": {"action": "escalate", "reason": reason, "signals": {"injection": True}}}
+    injection_hint = (
+        {"reason": reason, "signals": {"injection": True}} if is_inj else None
+    )
 
-    run_id = f"{_sanitize_ticket_id(str(ticket.get('ticket_id', 'unknown')))}-{uuid.uuid4().hex[:8]}"
-    os.environ["CS_RUN_ID"] = run_id
-    state_file = _state_file_path(run_id)
     try:
         proc = await asyncio.create_subprocess_exec(
             *_CLAUDE_CLI,
@@ -193,24 +195,22 @@ async def run_ai_team(ticket: dict) -> dict:
         )
         out_b, err_b = await proc.communicate(input=_build_test_prompt(ticket).encode())
         if proc.returncode != 0:
+            # D-33: cli_error → always-draft with advisory hint, never escalate=no-draft
             return {"properties": {}, "verdict": {
-                "action": "escalate", "reason": "cli_error",
-                "signals": {"stderr": redact_text(err_b.decode(errors='replace')[:200])}}}
+                "action": "draft", "body": "", "citations": [],
+                "escalation_hint": {
+                    "reason": "cli_error",
+                    "signals": {"stderr": redact_text(err_b.decode(errors='replace')[:200])},
+                }}}
         parsed = _parse_combined(out_b.decode(errors="replace"))
-        # Post-screen the draft through the hook chain (grounding + commitment tripwire)
-        v = parsed["verdict"]
-        if v.get("action") == "draft":
-            esc, esc_reason = _post_screen_draft(v.get("body", ""), v.get("citations", []))
-            if esc:
-                parsed["verdict"] = {"action": "escalate", "reason": esc_reason, "signals": {}}
+        # Merge injection hint if the pre-screen flagged (advisory only — never changes action)
+        if injection_hint and parsed["verdict"].get("escalation_hint") is None:
+            parsed["verdict"]["escalation_hint"] = injection_hint
         return parsed
-    finally:
-        try:
-            if state_file.exists():
-                state_file.unlink()
-        except OSError:
-            pass
-        os.environ.pop("CS_RUN_ID", None)
+    except Exception as exc:  # noqa: BLE001
+        return {"properties": {}, "verdict": {
+            "action": "draft", "body": "", "citations": [],
+            "escalation_hint": {"reason": f"run_error:{exc}", "signals": {}}}}
 
 
 # ---------------------------------------------------------------------------
@@ -390,15 +390,6 @@ def _load_templates(category: str) -> str:
             if total >= _MAX_TEMPLATE_CHARS:
                 return "".join(parts)
     return "".join(parts)
-
-
-def _load_authorize_offer():
-    import importlib.util as ilu
-    spec = ilu.spec_from_file_location(
-        "authorized_offer", _REPO_ROOT / ".claude" / "hooks" / "authorized_offer.py")
-    m = ilu.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m.authorize_offer, m.default_eligibility
 
 
 def _build_draft_prompt(rec: dict, templates: str, selless: dict | None,
@@ -597,9 +588,12 @@ _SELLESS_BASE = settings.selless_api_base_url  # single source of truth (src/con
 
 
 async def draft(only_cat: str | None) -> None:
-    """PoC draft mode: ALWAYS produce a reply. No D-26 guard, no escalation.
+    """Debug draft mode (D-35 deprecated for validation — use collect() for fidelity).
 
-    Ground from local templates + workflow (CS properties) + best-effort live Selless data.
+    Always-draft (D-33): produces a reply grounded on local templates + workflow
+    (CS properties) + best-effort live Selless data. No guard, no escalation.
+    This path is a debug/shortcut aid only; collect() via the real team is the
+    D-35 validation path.
     """
     recs = [json.loads(l) for l in _DATA_PATH.read_text(encoding="utf-8").splitlines() if l.strip()]
     tmpl_cache: dict[str, str] = {}

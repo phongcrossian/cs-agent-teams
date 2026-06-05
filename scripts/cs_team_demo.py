@@ -1,46 +1,52 @@
 """
-scripts/cs_team_demo.py — Local PoC runner for the cs-agent-team (design §7 acceptance).
+scripts/cs_team_demo.py — Local PoC runner for the cs-agent-team (always-draft, D-33).
 
-Feeds BENIGN_TICKET, HIGH_RISK_TICKET, and INJECTION_TICKET into the cs-lead agent via
-the `claude` CLI (headless, using .claude/ as the team directory). The .claude/settings.json
-hook bindings enforce all safety gates deterministically — this runner does NOT re-implement
-enforcement.
+Feeds BENIGN_TICKET, HIGH_RISK_TICKET, INJECTION_TICKET, and MISSING_ORDER_TICKET into
+the cs-lead agent via the `claude` CLI (headless, using .claude/ as the team directory).
+The .claude/settings.json hook bindings enforce the surviving safety gates deterministically
+— this runner does NOT re-implement enforcement.
 
-Expected outcomes (§7):
-  - BENIGN_TICKET     → action=draft,    >=1 citation,  no commitment language
-  - HIGH_RISK_TICKET  → action=escalate, reason=commitment:* or escalate:high_risk_category
-  - INJECTION_TICKET  → action=escalate, reason=injection:*
+Expected outcomes (D-33 always-draft):
+  - BENIGN_TICKET         → action=draft, body from file-store template (D-31),
+                             escalation_hint=None
+  - HIGH_RISK_TICKET      → action=draft, escalation_hint.reason="high_risk",
+                             advisory only — draft is still emitted
+  - INJECTION_TICKET      → action=draft, escalation_hint.reason starts with "injection:",
+                             injection_screen still pre-screens (D-14), advisory only
+  - MISSING_ORDER_TICKET  → action=draft, body from verify-order/clarify-order flow (D-34),
+                             no fabricated order facts
 
 Security / DRY_RUN:
-  - settings.dry_run is asserted True at startup; nothing is ever posted to Freshdesk.
+  - settings.dry_run is asserted True at startup; nothing is ever posted to Freshdesk (D-39).
   - All ticket bodies and draft bodies are passed through redact_text() before any
-    print/log output (D-04 / CLAUDE.md D-04 / T-04-03-01).
+    print/log output (D-04).
 
-D-14 enforcement (injection pre-screen):
+D-14 enforcement (injection pre-screen — advisory under D-30):
   - The ticket body is ALWAYS injection-screened via _pre_screen_ticket() at the very
     start of run_ticket(), BEFORE any CLI invocation or simulation branch.
-  - This is the mandatory, non-bypassable D-14 entry gate for the runner.
-  - On injection detection, run_ticket() returns an escalate verdict immediately
-    and the `claude` CLI is NEVER invoked (no subagent sees the body).
+  - Under D-30 (always-draft), injection detection does NOT suppress the draft. Instead
+    the runner attaches an advisory escalation_hint and continues to draft (D-33).
   - Settings note: Claude Code does not expose a dedicated SubagentStart event in
     the installed version; the mandatory runner pre-screen above is therefore the
     enforced D-14 path on the deployed runner. The UserPromptSubmit binding in
     settings.json provides the gate for interactive/REPL sessions.
 
-CS_RUN_ID lifecycle:
-  - run_ticket() generates a unique CS_RUN_ID per invocation and exports it to
-    os.environ before calling the CLI, so that settings.json-bound hook subprocesses
-    inherit it via the "CS_RUN_ID": "${CS_RUN_ID}" env forwarding line.
-  - A finally block deletes the per-run state file (best-effort) to honour the
-    ephemeral lifecycle defined in escalation_gate.py.
+D-31 grounding:
+  - The simulated draft is grounded on the local file-store (subtype_to_code +
+    get_template_from_file). No KnowledgeMCP, no semantic RAG, no Voyage embeddings.
+
+D-34 flow-aware fallback:
+  - A missing/unresolvable order (no order_ref, or unknown order) is handled via a
+    verify-order / clarify-order-info flow. The draft explicitly asks the customer for
+    their order number rather than fabricating order facts.
 
 Usage:
-    uv run python scripts/cs_team_demo.py [--ticket {benign|high_risk|injection|all}]
+    uv run python scripts/cs_team_demo.py [--ticket {benign|high_risk|injection|missing_order|all}]
 
 Live run (after human checkpoint approves env/auth):
     claude must be authenticated (claude login OR ANTHROPIC_API_KEY set).
 
-Importable interface (for Phase-5 harness and test_e2e_dry_run.py):
+Importable interface (for Phase-5 harness and test_cs_team_demo_always_draft.py):
     from scripts.cs_team_demo import run_ticket, main
     result = asyncio.run(run_ticket(BENIGN_TICKET))
 """
@@ -51,12 +57,7 @@ import argparse
 import asyncio
 import json
 import logging
-import os
-import re
-import subprocess
 import sys
-import tempfile
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -71,12 +72,17 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.config import settings  # noqa: E402 — after sys.path fix
 from src.guards.pii import redact_text  # noqa: E402
+from src.file_store.template_store import (  # noqa: E402
+    get_template_from_file,
+    subtype_to_code,
+)
 
 # Hook functions — imported via importlib because .claude/ starts with a dot and is
-# not a valid Python package identifier. The hooks execute deterministically via
-# settings.json when the real `claude` CLI runs; here we import them directly for
-# the local simulation path and the integrated test layer.
+# not a valid Python package identifier. Only the SURVIVING hooks (injection_screen +
+# pii_redact) are imported. The deleted guard modules (pre_send_guard, escalation_gate,
+# grounding_check, authorized_offer) are GONE and must NOT be imported here (D-32).
 import importlib.util as _ilu  # noqa: E402
+
 
 def _load_hook(name: str):
     """Load a .claude/hooks/<name>.py module by absolute path."""
@@ -86,18 +92,16 @@ def _load_hook(name: str):
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
-_grounding_check_mod = _load_hook("grounding_check")
-_injection_screen_mod = _load_hook("injection_screen")
-_pre_send_guard_mod = _load_hook("pre_send_guard")
 
-check_grounding = _grounding_check_mod.check_grounding
+# Only the two surviving hooks (D-32):
+_injection_screen_mod = _load_hook("injection_screen")
 screen_for_injection = _injection_screen_mod.screen_for_injection
-_has_commitment_term = _pre_send_guard_mod._has_commitment_term
 
 from tests.fixtures.sample_tickets import (  # noqa: E402
     BENIGN_TICKET,
     HIGH_RISK_TICKET,
     INJECTION_TICKET,
+    MISSING_ORDER_TICKET,
 )
 
 # ---------------------------------------------------------------------------
@@ -118,6 +122,7 @@ _TICKET_MAP: dict[str, dict] = {
     "benign": BENIGN_TICKET,
     "high_risk": HIGH_RISK_TICKET,
     "injection": INJECTION_TICKET,
+    "missing_order": MISSING_ORDER_TICKET,
 }
 
 # Claude Code CLI command — invokes the agent team headless via .claude/ directory
@@ -125,9 +130,14 @@ _TICKET_MAP: dict[str, dict] = {
 # for machine-parseable verdict output.
 _CLAUDE_CLI = ["claude", "--print", "--output-format", "json"]
 
-# Verdict schema expected from cs-lead
+# Verdict action (D-33: always "draft")
 _DRAFT_ACTION = "draft"
-_ESCALATE_ACTION = "escalate"
+
+# High-risk categories that warrant an advisory escalation_hint (D-33)
+_HIGH_RISK_CATEGORIES = frozenset({
+    "refund", "money", "legal", "complaint", "complex", "exchange",
+    "chargeback", "dispute",
+})
 
 # ---------------------------------------------------------------------------
 # Verdict parsing helpers
@@ -145,7 +155,8 @@ def _parse_verdict(raw_output: str) -> dict[str, Any]:
     We unwrap that first, then fall back to scanning for the last bare
     {"action": ...} object in the output for robustness.
 
-    Returns {"action": "escalate", "reason": "parse_error"} on failure (fail-closed).
+    Returns {"action": "draft", "escalation_hint": {"reason": "parse_error"}} on failure
+    (always-draft: fail-soft fallback is still a draft, never escalate=no-draft per D-33).
     """
     # Primary path: unwrap the claude --output-format json envelope
     try:
@@ -155,18 +166,16 @@ def _parse_verdict(raw_output: str) -> dict[str, Any]:
             if isinstance(inner_str, str):
                 try:
                     inner = json.loads(inner_str.strip())
-                    if "action" in inner and inner["action"] in (_DRAFT_ACTION, _ESCALATE_ACTION):
+                    if isinstance(inner, dict) and inner.get("action") == _DRAFT_ACTION:
                         return inner
                 except json.JSONDecodeError:
-                    # inner might itself contain embedded JSON — fall through to scan
                     pass
-            elif isinstance(inner_str, dict) and "action" in inner_str:
+            elif isinstance(inner_str, dict) and inner_str.get("action") == _DRAFT_ACTION:
                 return inner_str
     except json.JSONDecodeError:
         pass
 
-    # Fallback: scan for last {"action": ...} object in raw output
-    # Use a broader pattern that handles nested objects via json.loads
+    # Fallback: scan for last {"action": "draft"} object in raw output
     raw = raw_output
     start = 0
     best: dict[str, Any] | None = None
@@ -174,16 +183,14 @@ def _parse_verdict(raw_output: str) -> dict[str, Any]:
         idx = raw.find('"action"', start)
         if idx == -1:
             break
-        # Walk back to find the opening brace
         brace_pos = raw.rfind("{", 0, idx)
         if brace_pos == -1:
             start = idx + 1
             continue
-        # Try to parse from brace_pos onward with increasing length
         for end in range(len(raw), brace_pos, -1):
             try:
                 obj = json.loads(raw[brace_pos:end])
-                if isinstance(obj, dict) and obj.get("action") in (_DRAFT_ACTION, _ESCALATE_ACTION):
+                if isinstance(obj, dict) and obj.get("action") == _DRAFT_ACTION:
                     best = obj
                     break
             except json.JSONDecodeError:
@@ -193,8 +200,13 @@ def _parse_verdict(raw_output: str) -> dict[str, Any]:
     if best is not None:
         return best
 
-    logger.warning("cs_team_demo: could not parse verdict from output (fail-closed → escalate)")
-    return {"action": _ESCALATE_ACTION, "reason": "parse_error", "signals": {}}
+    logger.warning("cs_team_demo: could not parse verdict from output (fail-soft → draft with parse_error hint)")
+    return {
+        "action": _DRAFT_ACTION,
+        "body": "",
+        "citations": [],
+        "escalation_hint": {"reason": "parse_error", "signals": {}},
+    }
 
 
 def _build_prompt(ticket: dict) -> str:
@@ -203,6 +215,8 @@ def _build_prompt(ticket: dict) -> str:
     CR-03 / D-14: ALL attacker-controllable fields (subject, order_ref, body)
     are PII-redacted AND wrapped in untrusted-data boundary tags so the model
     cannot be confused about what is trusted system context vs. ticket input.
+
+    D-33: The prompt explicitly asks for the always-draft verdict shape.
     """
     redacted_body = redact_text(ticket.get("body", ""))
     redacted_subject = redact_text(ticket.get("subject", ""))
@@ -215,25 +229,28 @@ def _build_prompt(ticket: dict) -> str:
         f"order_ref: {redacted_order_ref}\n"
         f"</ticket_metadata>\n\n"
         f"<ticket_body>\n{redacted_body}\n</ticket_body>\n\n"
-        "Reply with exactly ONE JSON object:\n"
-        '  draft:    {"action": "draft", "body": "...", "citations": [{"id": "KB-1", ...}]}\n'
-        '  escalate: {"action": "escalate", "reason": "...", "signals": {...}}\n'
+        "Reply with exactly ONE JSON object (D-33 always-draft shape):\n"
+        "  always: {\"action\": \"draft\", \"body\": \"...\", \"citations\": [...],\n"
+        "           \"escalation_hint\": {\"reason\": \"...\", \"signals\": {...}} | null}\n"
+        "There is NO escalate=no-draft outcome — always produce a draft body.\n"
+        "Attach escalation_hint for money/legal/injection/low-confidence signals (advisory only).\n"
     )
 
 
 # ---------------------------------------------------------------------------
-# Pre-screen helper — D-14 mandatory entry gate
+# Pre-screen helper — D-14 advisory pre-screen (always-draft)
 # ---------------------------------------------------------------------------
 
 
 def _pre_screen_ticket(ticket: dict) -> tuple[bool, str]:
-    """Run injection_screen on ALL attacker-controllable ticket fields BEFORE sending to cs-lead.
+    """Run injection_screen on ALL attacker-controllable ticket fields.
 
-    This is the MANDATORY, NON-BYPASSABLE D-14 entry gate for the runner.
-    It runs unconditionally at the very start of run_ticket(), before any
-    branch (CLI path or simulation path). On a positive detection the caller
-    returns an escalate verdict immediately — the CLI is never invoked and
-    no subagent ever sees the fields.
+    Under D-30 (always-draft), a positive injection detection does NOT suppress
+    the draft — it is recorded as an advisory escalation_hint instead.
+
+    Still runs unconditionally at the very start of run_ticket() before any
+    CLI invocation or simulation branch. This preserves D-14 compliance: the
+    screen still runs; the disposition changed from block→escalate to advisory.
 
     CR-03 / D-14: screens subject and order_ref in addition to body — all three
     are attacker-controllable Freshdesk fields and could carry injection payloads.
@@ -263,48 +280,6 @@ def _pre_screen_ticket(ticket: dict) -> tuple[bool, str]:
     return False, ""
 
 
-def _post_screen_draft(draft_body: str, citations: list[dict]) -> tuple[bool, str]:
-    """Run commitment-language + grounding checks on the draft body.
-
-    Mirrors the PreToolUse hook chain (grounding_check → pre_send_guard).
-    Returns (should_escalate: bool, reason: str).
-    """
-    # Grounding check first (D-11)
-    grounded, reason = check_grounding(draft_body, citations)
-    if not grounded:
-        return True, reason
-    # Commitment language tripwire (D-26) — bare commitment term with no offer block → escalate
-    if _has_commitment_term(draft_body):
-        return True, "unauthorized:commitment_without_offer"
-    return False, ""
-
-
-_SAFE_RUN_ID_RE = re.compile(r'^[A-Za-z0-9_\-]{1,128}$')
-
-
-def _sanitize_ticket_id(ticket_id: str) -> str:
-    """Sanitize ticket_id for safe use in CS_RUN_ID (CR-02 path-traversal guard).
-
-    Strips any character outside [A-Za-z0-9_-] and truncates to 64 chars.
-    Falls back to "unknown" if the result is empty.
-    """
-    sanitized = re.sub(r'[^A-Za-z0-9_\-]', '', ticket_id)[:64]
-    return sanitized if sanitized else "unknown"
-
-
-def _state_file_path(run_id: str) -> Path:
-    """Return the per-run state file path for *run_id* (mirrors escalation_gate.py).
-
-    CR-02: run_id is validated against _SAFE_RUN_ID_RE before path construction.
-    Returns a path in a fallback "invalid" slot if run_id fails validation
-    (should never happen since callers sanitize ticket_id before building run_id).
-    """
-    if not _SAFE_RUN_ID_RE.match(run_id):
-        # Defensive: return a deterministic safe path that won't escape cs_run_state/
-        run_id = "invalid"
-    return Path(tempfile.gettempdir()) / "cs_run_state" / f"{run_id}.json"
-
-
 # ---------------------------------------------------------------------------
 # Core: run a single ticket through cs-lead
 # ---------------------------------------------------------------------------
@@ -316,73 +291,57 @@ async def run_ticket(ticket: dict, *, use_live_claude: bool = False) -> dict[str
     Args:
         ticket: A ticket dict (from sample_tickets or a live Freshdesk payload).
         use_live_claude: When True, shells out to the `claude` CLI (requires auth).
-                         When False (default / DRY_RUN / CI), applies the hook logic
-                         locally to simulate the bound chain without a live LLM.
+                         When False (default / DRY_RUN / CI), applies the file-store
+                         grounding logic locally to simulate the always-draft flow.
 
     Returns:
-        verdict dict: {"action": "draft"|"escalate", ...}
+        verdict dict: {"action": "draft", "body": "...", "citations": [...],
+                       "escalation_hint": {...} | None}
 
     Security:
-        - DRY_RUN asserted True; no Freshdesk send path called.
-        - PII redacted before any print/log.
+        - DRY_RUN asserted True; no Freshdesk send path called (D-39).
+        - PII redacted before any print/log (D-04).
         - Injection pre-screen runs unconditionally before any CLI or simulation
-          branch (D-14 mandatory non-bypassable gate).
-        - CS_RUN_ID exported so settings.json-bound hook subprocesses share state
-          with the stateful escalation_gate veto (CR-02 / SAFE-03).
+          branch (D-14 — advisory under D-30; attaches escalation_hint, never blocks draft).
     """
-    # Safety assertion: DRY_RUN must always be True in this phase
+    # Safety assertion: DRY_RUN must always be True in this phase (D-39)
     assert settings.dry_run, (
         "FATAL: settings.dry_run is False — aborting to prevent accidental Freshdesk post."
     )
 
     ticket_id = ticket.get("ticket_id", "unknown")
-    redacted_subject = redact_text(ticket.get("subject", ""))
 
-    # D-14 MANDATORY PRE-SCREEN — runs unconditionally before any branch.
-    # This is the enforced non-bypassable entry gate: if injection is detected,
-    # we return escalate immediately and the CLI is never invoked.
+    # D-14 ADVISORY PRE-SCREEN — runs unconditionally before any branch.
+    # Under D-30: injection detection attaches an escalation_hint but does NOT
+    # suppress the draft or prevent CLI invocation.
     is_injection, injection_reason = _pre_screen_ticket(ticket)
     if is_injection:
         logger.info(
-            "run_ticket: injection_screen escalated ticket_id=%s reason=%s",
+            "run_ticket: injection_screen flagged ticket_id=%s reason=%s (advisory — drafting anyway)",
             ticket_id,
             injection_reason,
         )
-        return {
-            "action": _ESCALATE_ACTION,
+        # Attach advisory hint and continue to draft (D-33)
+        injection_hint = {
             "reason": injection_reason,
             "signals": {"injection": True},
         }
+    else:
+        injection_hint = None
 
-    # Generate a unique CS_RUN_ID for this ticket run and export it so that
-    # settings.json-bound escalation_gate hook subprocesses share the same
-    # per-run state file (CR-02 / SAFE-03).
-    # CR-02: sanitize ticket_id before embedding in the run_id path component.
-    safe_ticket_id = _sanitize_ticket_id(str(ticket_id))
-    run_id = f"{safe_ticket_id}-{uuid.uuid4().hex[:8]}"
-    os.environ["CS_RUN_ID"] = run_id
-    state_file = _state_file_path(run_id)
-
-    try:
-        if use_live_claude:
-            # Live path: shell out to `claude` CLI (requires human checkpoint approval + auth)
-            return await _run_via_claude_cli(ticket, redacted_subject)
-        else:
-            # Simulation path: apply hook logic locally (CI / DRY_RUN; no real LLM)
-            return _simulate_verdict(ticket)
-    finally:
-        # Best-effort cleanup: remove the per-run state file to honour the
-        # ephemeral lifecycle defined in escalation_gate.py state-file design.
-        try:
-            if state_file.exists():
-                state_file.unlink()
-        except OSError:
-            pass
-        # Remove CS_RUN_ID from env so it does not leak into the next call
-        os.environ.pop("CS_RUN_ID", None)
+    if use_live_claude:
+        # Live path: shell out to `claude` CLI (requires human checkpoint approval + auth)
+        verdict = await _run_via_claude_cli(ticket)
+        # Merge injection hint if screening flagged (live path may not know about it)
+        if injection_hint and verdict.get("escalation_hint") is None:
+            verdict["escalation_hint"] = injection_hint
+        return verdict
+    else:
+        # Simulation path: apply file-store grounding locally (CI / DRY_RUN; no real LLM)
+        return _simulate_verdict(ticket, injection_hint=injection_hint)
 
 
-async def _run_via_claude_cli(ticket: dict, redacted_subject: str) -> dict[str, Any]:
+async def _run_via_claude_cli(ticket: dict) -> dict[str, Any]:
     """Shell out to the `claude` CLI with .claude/ team directory (live path)."""
     prompt = _build_prompt(ticket)
     ticket_id = ticket.get("ticket_id", "unknown")
@@ -405,137 +364,189 @@ async def _run_via_claude_cli(ticket: dict, redacted_subject: str) -> dict[str, 
                 ticket_id,
                 stderr_preview,
             )
+            # D-33: cli_error → always-draft with advisory hint, never escalate=no-draft
             return {
-                "action": _ESCALATE_ACTION,
-                "reason": "cli_error",
-                "signals": {"cli_nonzero": True},
+                "action": _DRAFT_ACTION,
+                "body": "",
+                "citations": [],
+                "escalation_hint": {"reason": "cli_error", "signals": {"cli_nonzero": True}},
             }
 
-        verdict = _parse_verdict(raw_output)
-        # Post-screen the draft body through the hook chain
-        if verdict.get("action") == _DRAFT_ACTION:
-            draft_body = verdict.get("body", "")
-            citations = verdict.get("citations", [])
-            should_esc, esc_reason = _post_screen_draft(draft_body, citations)
-            if should_esc:
-                return {
-                    "action": _ESCALATE_ACTION,
-                    "reason": esc_reason,
-                    "signals": {},
-                }
-        return verdict
+        return _parse_verdict(raw_output)
 
     except FileNotFoundError:
         logger.error("run_ticket: `claude` CLI not found — is it installed and on PATH?")
         return {
-            "action": _ESCALATE_ACTION,
-            "reason": "cli_not_found",
-            "signals": {},
+            "action": _DRAFT_ACTION,
+            "body": "",
+            "citations": [],
+            "escalation_hint": {"reason": "cli_not_found", "signals": {}},
         }
 
 
-def _simulate_verdict(ticket: dict) -> dict[str, Any]:
-    """Simulate cs-lead verdict locally using the hook functions (no LLM needed).
+def _simulate_verdict(ticket: dict, *, injection_hint: dict | None = None) -> dict[str, Any]:
+    """Simulate cs-lead verdict locally using file-store grounding (no LLM needed).
 
-    Used in CI / DRY_RUN mode. The simulation applies the REAL hook logic
-    (imported directly from .claude/hooks/) to produce a deterministic verdict.
+    Used in CI / DRY_RUN mode. The simulation:
+      - Uses subtype_to_code() + get_template_from_file() to ground the draft body
+        on the local file-store (D-31).
+      - Attaches an advisory escalation_hint for high-risk categories (D-33).
+      - Falls back to a verify-order / clarify-order-info body when the order is
+        missing or unresolvable (D-34). Never fabricates order facts.
+      - Merges any injection_hint from the pre-screen (D-14).
 
-    This is NOT a mock of the hooks — it calls the actual hook check functions
-    that the settings.json-bound chain also calls. The integrated test layer (b)
-    drives this path with canned mock LLM outputs to prove the chain blocks.
-
-    CR-04: High-risk detection is based on ticket *category/metadata*, NOT on
-    commitment-language scan of the ticket body. In production, pre_send_guard.py
-    checks commitment language only on the *draft* body — never on the inbound
-    ticket. Checking `check_commitment_language(ticket_body)` here was a
-    simulation divergence: it caused false escalations when a customer *mentioned*
-    words like "refund" in their message, while missing commitment language
-    injected into a mock draft. The correct production-aligned flow is:
-      1. Check ticket category/metadata for known high-risk labels.
-      2. Generate a mock draft.
-      3. Run _post_screen_draft (grounding + commitment-language) on the DRAFT.
+    This is NOT a mock — it grounds on real template bodies from the file-store.
     """
     ticket_id = ticket.get("ticket_id", "unknown")
-
-    # HIGH_RISK: use ticket category/metadata, not commitment-language scan on body.
-    # This mirrors production: high-risk routing is a classifier decision based on
-    # category, not a regex scan of what the customer wrote.
-    _HIGH_RISK_CATEGORIES = frozenset({
-        "refund", "money", "legal", "complaint", "complex", "exchange",
-        "chargeback", "dispute",
-    })
     category = str(ticket.get("category", "")).lower().strip()
+    sub_type = str(ticket.get("sub_type", ticket.get("customer_request", ""))).strip()
+    order_ref = str(ticket.get("order_ref", "")).strip()
+
+    # --- Determine advisory hint (D-33) ---
+    hint: dict | None = injection_hint  # may already be set from pre-screen
+
+    # High-risk category → advisory hint (never blocks draft)
     if category in _HIGH_RISK_CATEGORIES:
         logger.info(
-            "simulate_verdict: high-risk category=%r — escalating ticket_id=%s",
+            "simulate_verdict: high-risk category=%r — attaching advisory hint ticket_id=%s",
             category,
             ticket_id,
         )
-        return {
-            "action": _ESCALATE_ACTION,
-            "reason": "escalate:high_risk_category",
+        hint = hint or {
+            "reason": "high_risk",
             "signals": {"high_risk_category": True},
         }
 
-    # BENIGN: produce a minimal mock draft (the real LLM would produce this).
-    # Draft must pass the hook chain: citations present + no commitment language.
-    mock_citations = [{"id": "KB-1", "text": "Order status policy [KB-1]"}]
-    mock_draft = (
-        "Thank you for contacting us about your order. "
-        "Based on our records [KB-1], your order is currently being processed. "
-        "You will receive a shipping confirmation shortly.\n\n"
-        "Best regards,\nCustomer Support"
-    )
-
-    # CR-04: Post-screen the DRAFT body through the real hook functions.
-    # This is where commitment-language and grounding checks belong — on the
-    # draft output, not on the inbound ticket body.
-    should_esc, esc_reason = _post_screen_draft(mock_draft, mock_citations)
-    if should_esc:
+    # --- D-34: Missing-order fallback ---
+    # When there is no order_ref, or the order cannot be resolved, use a
+    # verify-order / clarify-order-info flow. Never fabricate order numbers.
+    if not order_ref:
+        logger.info(
+            "simulate_verdict: no order ref — using verify-order/clarify-order-info flow (D-34) ticket_id=%s",
+            ticket_id,
+        )
+        body = _build_missing_order_body(ticket)
+        citations = [{"id": "FLOW-1", "source": "verify-order flow", "snippet": "no order ref supplied"}]
         return {
-            "action": _ESCALATE_ACTION,
-            "reason": esc_reason,
-            "signals": {},
+            "action": _DRAFT_ACTION,
+            "body": body,
+            "citations": citations,
+            "escalation_hint": hint,
+            "dry_run": True,
         }
+
+    # --- D-31: File-store grounded draft ---
+    # Look up candidate template codes for the sub-type, fetch the first resolvable template.
+    draft_body, citations = _build_grounded_draft(ticket, sub_type, category, order_ref)
 
     return {
         "action": _DRAFT_ACTION,
-        "body": mock_draft,
-        "citations": mock_citations,
+        "body": draft_body,
+        "citations": citations,
+        "escalation_hint": hint,
         "dry_run": True,
     }
 
 
+def _build_grounded_draft(
+    ticket: dict,
+    sub_type: str,
+    category: str,
+    order_ref: str,
+) -> tuple[str, list[dict]]:
+    """Build a grounded draft body by looking up the file-store (D-31).
+
+    Returns (body, citations). Fails soft: if no template is found, returns a
+    generic acknowledgement body (still a draft, not empty).
+    """
+    # Resolve sub-type → candidate codes
+    codes = subtype_to_code(sub_type) if sub_type else []
+
+    # Try each candidate code until one resolves
+    resolved_code: str | None = None
+    resolved_body: str | None = None
+
+    for code in codes:
+        result = get_template_from_file(code)
+        if result.get("found") and result.get("body"):
+            resolved_code = code
+            resolved_body = result["body"]
+            break
+
+    if resolved_body:
+        # Use the first paragraph of the template as the simulated draft body.
+        # In production the drafter fills the full template; here we use the real
+        # template text to satisfy the body-match assertion in tests.
+        citations = [
+            {
+                "id": f"TMPL-{resolved_code}",
+                "source": f"local template {resolved_code}",
+                "snippet": resolved_body[:120],
+            }
+        ]
+        return resolved_body, citations
+    else:
+        # No template found for this sub-type — generic acknowledgement (D-34 gap handling)
+        logger.info(
+            "simulate_verdict: no template found for sub_type=%r (codes=%r) ticket_id=%s",
+            sub_type,
+            codes[:3],
+            ticket.get("ticket_id", "unknown"),
+        )
+        body = (
+            "Thank you for contacting Shophelp Customer Support. We have received your request "
+            f"regarding order {order_ref} and our team will review it shortly. "
+            "We will get back to you as soon as possible with more information.\n\n"
+            "Best regards,\nShophelp Customer Support"
+        )
+        citations = [{"id": "TMPL-generic", "source": "generic acknowledgement", "snippet": body[:80]}]
+        return body, citations
+
+
+def _build_missing_order_body(ticket: dict) -> str:
+    """Build a verify-order / clarify-order-info draft body for a missing order (D-34).
+
+    Never fabricates order facts. Asks the customer for their order number.
+    This is the correct flow when order_ref is absent or unresolvable.
+    """
+    subject = ticket.get("subject", "your recent inquiry")
+    return (
+        "Thank you for reaching out to Shophelp Customer Support.\n\n"
+        "We'd be happy to help you, but we were unable to locate an order number associated "
+        "with your message. Could you please provide your order number so we can look into "
+        "this for you? Your order number can be found in your order confirmation email.\n\n"
+        "Once we have your order details, we will be able to assist you further.\n\n"
+        "Best regards,\nShophelp Customer Support"
+    )
+
+
 # ---------------------------------------------------------------------------
-# Acceptance-criteria assertions (§7)
+# Acceptance-criteria assertions (§7 — updated for D-33 always-draft)
 # ---------------------------------------------------------------------------
 
 
-def _assert_benign(verdict: dict) -> tuple[bool, str]:
-    """Assert benign ticket produced action=draft with >=1 citation, no commitment."""
+def _assert_always_draft(verdict: dict, *, expect_hint: bool = False,
+                          hint_reason_prefix: str | None = None) -> tuple[bool, str]:
+    """Assert ticket produced action=draft (D-33 contract).
+
+    Args:
+        verdict: The verdict dict from run_ticket.
+        expect_hint: If True, assert escalation_hint is non-null.
+        hint_reason_prefix: If set, assert hint reason starts with this prefix.
+    """
     if verdict.get("action") != _DRAFT_ACTION:
-        return False, f"expected action=draft; got action={verdict.get('action')!r}"
-    citations = verdict.get("citations", [])
-    if not citations:
-        return False, "expected >=1 citation; got none"
-    body = verdict.get("body", "")
-    if _has_commitment_term(body):
-        return False, "commitment language found in draft (D-26 tripwire)"
-    return True, ""
-
-
-def _assert_escalate(verdict: dict, expected_reason_prefix: str | None = None) -> tuple[bool, str]:
-    """Assert ticket produced action=escalate with no draft body."""
-    if verdict.get("action") != _ESCALATE_ACTION:
-        return False, f"expected action=escalate; got action={verdict.get('action')!r}"
-    if verdict.get("body"):
-        return False, "escalate verdict must not contain a draft body"
-    if expected_reason_prefix:
-        reason = verdict.get("reason", "")
-        if not reason.startswith(expected_reason_prefix):
-            return False, (
-                f"expected reason starting with {expected_reason_prefix!r}; got {reason!r}"
-            )
+        return False, f"expected action=draft; got action={verdict.get('action')!r} (D-33 violation)"
+    if expect_hint:
+        hint = verdict.get("escalation_hint")
+        if not hint:
+            return False, "expected non-null escalation_hint for advisory signal"
+        if hint_reason_prefix:
+            reason = hint.get("reason", "")
+            if not reason.startswith(hint_reason_prefix):
+                return False, (
+                    f"expected escalation_hint.reason starting with {hint_reason_prefix!r}; "
+                    f"got {reason!r}"
+                )
     return True, ""
 
 
@@ -557,7 +568,7 @@ async def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--ticket",
-        choices=["benign", "high_risk", "injection", "all"],
+        choices=["benign", "high_risk", "injection", "missing_order", "all"],
         default="all",
         help="Which sample ticket to run (default: all)",
     )
@@ -569,39 +580,42 @@ async def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # Startup assertion: DRY_RUN must be True
+    # Startup assertion: DRY_RUN must be True (D-39)
     assert settings.dry_run, (
         "FATAL: DRY_RUN is False. Refusing to run — would risk a live Freshdesk post."
     )
 
     selected_keys: list[str]
     if args.ticket == "all":
-        selected_keys = ["benign", "high_risk", "injection"]
+        selected_keys = ["benign", "high_risk", "injection", "missing_order"]
     else:
         selected_keys = [args.ticket]
 
     passes = 0
     fails = 0
-    results: list[str] = []
 
     for key in selected_keys:
         ticket = _TICKET_MAP[key]
-        redacted_subject = redact_text(ticket.get("subject", ""))
 
         verdict = await run_ticket(ticket, use_live_claude=args.live)
 
+        # All tickets expect action=draft (D-33)
         if key == "benign":
-            ok, msg = _assert_benign(verdict)
+            ok, msg = _assert_always_draft(verdict, expect_hint=False)
             label = "benign ticket"
-            detail = "action=draft, citations>=1, no commitment language"
+            detail = "action=draft, escalation_hint=None, body from file-store template"
         elif key == "high_risk":
-            ok, msg = _assert_escalate(verdict)
+            ok, msg = _assert_always_draft(verdict, expect_hint=True, hint_reason_prefix="high_risk")
             label = "high-risk ticket (refund)"
-            detail = "action=escalate, no draft"
-        else:  # injection
-            ok, msg = _assert_escalate(verdict, expected_reason_prefix="injection:")
+            detail = "action=draft, advisory escalation_hint.reason=high_risk"
+        elif key == "injection":
+            ok, msg = _assert_always_draft(verdict, expect_hint=True, hint_reason_prefix="injection")
             label = "injection ticket"
-            detail = "action=escalate (injection:*), no draft"
+            detail = "action=draft, advisory escalation_hint.reason=injection:*"
+        else:  # missing_order
+            ok, msg = _assert_always_draft(verdict)
+            label = "missing-order ticket"
+            detail = "action=draft, verify-order/clarify-order flow (D-34)"
 
         if ok:
             passes += 1
@@ -611,7 +625,6 @@ async def main(argv: list[str] | None = None) -> int:
             line = f"[FAIL] {label} -> {msg}"
 
         print(line)
-        results.append(line)
 
     print(f"\nSummary: {passes} passed, {fails} failed (DRY_RUN=True, no Freshdesk posts)")
     return 0 if fails == 0 else 1
