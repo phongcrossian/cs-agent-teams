@@ -3,6 +3,9 @@
 Tests target the NEW pure helpers:
   - `_parse_ticket_list(path)` — parses uat_ticket.csv (semicolon-delimited) or plain ID-per-line
   - `_apply_caps(rows, limit, per_cat)` — applies --limit / --per-cat caps and returns dropped report
+  - `_assemble_fd_property_update(ai_props)` — adapter: derives Level_in from category, calls
+    build_fd_property_update, returns block with owned fields only (08-02)
+  - `_fd_field_match(fd_update, fd_props)` — per-owned-field match dict vs CS gold (08-02)
 
 These tests MUST NOT invoke `claude`, Freshdesk, Selless, or any live service.
 They do NOT import `collect` or `run_ai_team`.
@@ -26,6 +29,9 @@ from scripts.test_tickets_run import (
     _extract_fd_props,
     _parse_ticket_list,
     _apply_caps,
+    _assemble_fd_property_update,
+    _fd_field_match,
+    OWNED_FIELDS,
 )
 
 
@@ -327,3 +333,335 @@ def test_build_xlsx_handles_int_props(tmp_path: Path, monkeypatch: pytest.Monkey
 
     ttr.build_xlsx()  # must not raise on int-valued props
     assert xlsx_path.exists(), "build_xlsx should write the workbook with int props present"
+
+
+# ---------------------------------------------------------------------------
+# 08-02: _assemble_fd_property_update tests (offline — NO network calls)
+# These tests exercise the pure helper adapter that derives Level_in from
+# AI category and calls build_fd_property_update. Fully offline.
+# ---------------------------------------------------------------------------
+
+def test_assemble_fd_property_update_returns_owned_fields_only() -> None:
+    """_assemble_fd_property_update returns a block with exactly OWNED_FIELDS as keys.
+
+    No out-of-scope fields (Package_status, Handler, etc.) should appear.
+    OFFLINE: pure dict input, no network.
+    """
+    ai_props = {
+        "category": "complaint",
+        "customer_request": "Return",
+        "rootcause": "",
+        "flow": "",
+        "step": "",
+    }
+    result = _assemble_fd_property_update(ai_props)
+
+    assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+    assert "fields" in result, "Result must have 'fields' key"
+    assert "all_valid" in result, "Result must have 'all_valid' key"
+    assert result.get("advisory") is True, "Result must have advisory=True"
+
+    # Only OWNED_FIELDS appear in fields
+    fields = result["fields"]
+    for field in fields:
+        assert field in OWNED_FIELDS, f"Out-of-scope field {field!r} must not appear in fd_property_update"
+    for field in OWNED_FIELDS:
+        assert field in fields, f"OWNED_FIELD {field!r} must appear in fd_property_update"
+
+
+def test_assemble_fd_property_update_valid_complaint_return() -> None:
+    """category=complaint + customer_request=Return -> Level_in=Complaint, Customer_Request=Return valid.
+
+    The snapshot has Complaint->Return in the nested map, so status must be 'valid'.
+    OFFLINE: pure dict input.
+    """
+    ai_props = {
+        "category": "complaint",
+        "customer_request": "Return",
+        "rootcause": "",
+        "flow": "",
+        "step": "",
+    }
+    result = _assemble_fd_property_update(ai_props)
+    fields = result["fields"]
+
+    # Level_in derived as "Complaint" from category="complaint"
+    assert fields["Level_in"]["value"] == "Complaint", (
+        f"Expected Level_in='Complaint', got {fields['Level_in']['value']!r}"
+    )
+    assert fields["Level_in"]["status"] == "valid", (
+        f"Expected Level_in status 'valid', got {fields['Level_in']['status']!r}"
+    )
+
+    # Customer_Request=Return is a valid child of Complaint
+    assert fields["Customer_Request"]["value"] == "Return", (
+        f"Expected Customer_Request='Return', got {fields['Customer_Request']['value']!r}"
+    )
+    assert fields["Customer_Request"]["status"] in ("valid", "nested_mismatch"), (
+        f"Customer_Request status unexpected: {fields['Customer_Request']['status']!r} "
+        f"(expected valid or nested_mismatch for Return under Complaint)"
+    )
+    # Specifically: Return IS a child of Complaint in snapshot, so must be valid
+    assert fields["Customer_Request"]["status"] == "valid", (
+        f"Return must be valid under Complaint in snapshot; got {fields['Customer_Request']['status']!r}"
+    )
+
+
+def test_assemble_fd_property_update_invalid_customer_request() -> None:
+    """An invented customer_request value -> status 'invalid' (never coerced).
+
+    OFFLINE: pure dict input.
+    """
+    ai_props = {
+        "category": "complaint",
+        "customer_request": "Invented_Value_XYZ_999",
+        "rootcause": "",
+        "flow": "",
+        "step": "",
+    }
+    result = _assemble_fd_property_update(ai_props)
+    fields = result["fields"]
+
+    cr_status = fields["Customer_Request"]["status"]
+    assert cr_status in ("invalid", "nested_mismatch"), (
+        f"Invented customer_request must be 'invalid' or 'nested_mismatch', got {cr_status!r}"
+    )
+    # Value preserved verbatim — never coerced
+    assert fields["Customer_Request"]["value"] == "Invented_Value_XYZ_999", (
+        "Out-of-enum value must be preserved verbatim, not coerced"
+    )
+    # all_valid must be False when any field is invalid
+    assert result["all_valid"] is False, "all_valid must be False when Customer_Request is invalid"
+
+
+def test_assemble_fd_property_update_empty_enum_unverifiable() -> None:
+    """Rootcause/Flow/Section_Flow with empty enums in snapshot -> status 'unverifiable'.
+
+    Even if the AI supplies a non-empty value for these fields, when the snapshot
+    enum is empty the status is 'unverifiable', not 'valid' or 'invalid'.
+    OFFLINE: pure dict input.
+    """
+    ai_props = {
+        "category": "inquiry",
+        "customer_request": "Ask_About_Order",
+        "rootcause": "some_rootcause_value",
+        "flow": "some_flow_value",
+        "step": "some_step_value",
+    }
+    result = _assemble_fd_property_update(ai_props)
+    fields = result["fields"]
+
+    # Rootcause, Flow, Section_Flow have empty enums in snapshot -> unverifiable
+    for field in ("Rootcause", "Flow", "Section_Flow"):
+        status = fields[field]["status"]
+        assert status == "unverifiable", (
+            f"Field {field!r} with empty snapshot enum must be 'unverifiable', got {status!r}"
+        )
+
+
+def test_assemble_fd_property_update_change_request_category() -> None:
+    """category=change_request maps to Level_in=Change_Request (macro key in snapshot).
+
+    OFFLINE: pure dict input.
+    """
+    ai_props = {
+        "category": "change_request",
+        "customer_request": "Cancel_Order",
+        "rootcause": "",
+        "flow": "",
+        "step": "",
+    }
+    result = _assemble_fd_property_update(ai_props)
+    fields = result["fields"]
+
+    assert fields["Level_in"]["value"] == "Change_Request", (
+        f"Expected Level_in='Change_Request' for category='change_request', "
+        f"got {fields['Level_in']['value']!r}"
+    )
+
+
+def test_assemble_fd_property_update_inquiry_category() -> None:
+    """category=inquiry maps to Level_in=Inquiry.
+
+    OFFLINE: pure dict input.
+    """
+    ai_props = {
+        "category": "inquiry",
+        "customer_request": "Ask_About_Order",
+        "rootcause": "",
+        "flow": "",
+        "step": "",
+    }
+    result = _assemble_fd_property_update(ai_props)
+    fields = result["fields"]
+
+    assert fields["Level_in"]["value"] == "Inquiry", (
+        f"Expected Level_in='Inquiry' for category='inquiry', got {fields['Level_in']['value']!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 08-02: _fd_field_match tests (offline — NO network calls)
+# Tests the per-owned-field comparison helper against CS gold fd_props.
+# ---------------------------------------------------------------------------
+
+def test_fd_field_match_exact_match() -> None:
+    """All owned fields present + matching CS gold -> match=True for each.
+
+    OFFLINE: pure dict input.
+    """
+    fd_update = {
+        "fields": {
+            "Level_in": {"field": "Level_in", "value": "Complaint", "status": "valid", "allowed": ["Complaint"]},
+            "Customer_Request": {"field": "Customer_Request", "value": "Return", "status": "valid", "allowed": ["Return"]},
+            "Rootcause": {"field": "Rootcause", "value": "fit_issue", "status": "unverifiable", "allowed": []},
+            "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+            "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+        },
+        "all_valid": False,
+        "advisory": True,
+    }
+    fd_props = {
+        "Level_in": "Complaint",
+        "Customer_Request": "Return",
+        "Rootcause": "fit_issue",
+        # Flow/Section_Flow absent from CS gold
+    }
+
+    match_result = _fd_field_match(fd_update, fd_props)
+
+    assert isinstance(match_result, dict), f"Expected dict, got {type(match_result)}"
+    # Only OWNED_FIELDS in the result
+    for field in match_result:
+        assert field in OWNED_FIELDS, f"Non-owned field {field!r} must not appear in match result"
+
+    assert match_result["Level_in"]["match"] is True, "Level_in should match"
+    assert match_result["Level_in"]["ai_value"] == "Complaint"
+    assert match_result["Level_in"]["cs_gold"] == "Complaint"
+
+    assert match_result["Customer_Request"]["match"] is True, "Customer_Request should match"
+    assert match_result["Rootcause"]["match"] is True, "Rootcause values match case-insensitively"
+
+
+def test_fd_field_match_differ() -> None:
+    """AI value differs from CS gold -> match=False.
+
+    OFFLINE: pure dict input.
+    """
+    fd_update = {
+        "fields": {
+            "Level_in": {"field": "Level_in", "value": "Complaint", "status": "valid", "allowed": []},
+            "Customer_Request": {"field": "Customer_Request", "value": "Return", "status": "valid", "allowed": []},
+            "Rootcause": {"field": "Rootcause", "value": "", "status": "missing", "allowed": []},
+            "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+            "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+        },
+        "all_valid": True,
+        "advisory": True,
+    }
+    fd_props = {
+        "Level_in": "Inquiry",     # differs from AI "Complaint"
+        "Customer_Request": "Return",
+    }
+
+    match_result = _fd_field_match(fd_update, fd_props)
+
+    assert match_result["Level_in"]["match"] is False, (
+        "Level_in mismatch: AI=Complaint vs CS=Inquiry should be match=False"
+    )
+    assert match_result["Customer_Request"]["match"] is True, (
+        "Customer_Request same -> match=True"
+    )
+
+
+def test_fd_field_match_no_gold() -> None:
+    """Field absent from CS gold -> match=None and status='no_gold' (not a false mismatch).
+
+    OFFLINE: pure dict input.
+    """
+    fd_update = {
+        "fields": {
+            "Level_in": {"field": "Level_in", "value": "Inquiry", "status": "valid", "allowed": []},
+            "Customer_Request": {"field": "Customer_Request", "value": "Ask_About_Order", "status": "valid", "allowed": []},
+            "Rootcause": {"field": "Rootcause", "value": "some_value", "status": "unverifiable", "allowed": []},
+            "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+            "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+        },
+        "all_valid": False,
+        "advisory": True,
+    }
+    # CS gold has NO classification fields at all (e.g. ticket not classified by CS)
+    fd_props = {"Package_status": "in_transit", "Status": 2}
+
+    match_result = _fd_field_match(fd_update, fd_props)
+
+    for field in OWNED_FIELDS:
+        entry = match_result[field]
+        assert entry["match"] is None, f"Field {field!r} absent from CS gold -> match must be None"
+        assert entry["status"] == "no_gold", (
+            f"Field {field!r} absent from CS gold -> status must be 'no_gold', got {entry['status']!r}"
+        )
+
+
+def test_fd_field_match_out_of_scope_not_added() -> None:
+    """Out-of-scope FD fields present in fd_props are NOT added to the match dict.
+
+    Package_status, Handler, Level_out etc. must not appear in match result.
+    OFFLINE: pure dict input.
+    """
+    fd_update = {
+        "fields": {
+            "Level_in": {"field": "Level_in", "value": "Complaint", "status": "valid", "allowed": []},
+            "Customer_Request": {"field": "Customer_Request", "value": "Replace", "status": "valid", "allowed": []},
+            "Rootcause": {"field": "Rootcause", "value": "", "status": "missing", "allowed": []},
+            "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+            "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+        },
+        "all_valid": True,
+        "advisory": True,
+    }
+    fd_props = {
+        "Level_in": "Complaint",
+        "Customer_Request": "Replace",
+        "Package_status": "delivered",     # out-of-scope
+        "Handler": "some_handler",         # out-of-scope
+        "Level_out": "resolved",           # out-of-scope
+    }
+
+    match_result = _fd_field_match(fd_update, fd_props)
+
+    out_of_scope = [k for k in match_result if k not in OWNED_FIELDS]
+    assert out_of_scope == [], (
+        f"Out-of-scope fields must NOT appear in match result: {out_of_scope}"
+    )
+
+
+def test_fd_field_match_case_insensitive() -> None:
+    """Match comparison is case-insensitive on enum labels.
+
+    OFFLINE: pure dict input.
+    """
+    fd_update = {
+        "fields": {
+            "Level_in": {"field": "Level_in", "value": "Complaint", "status": "valid", "allowed": []},
+            "Customer_Request": {"field": "Customer_Request", "value": "Return", "status": "valid", "allowed": []},
+            "Rootcause": {"field": "Rootcause", "value": "", "status": "missing", "allowed": []},
+            "Flow": {"field": "Flow", "value": "", "status": "missing", "allowed": []},
+            "Section_Flow": {"field": "Section_Flow", "value": "", "status": "missing", "allowed": []},
+        },
+        "all_valid": True,
+        "advisory": True,
+    }
+    fd_props = {
+        "Level_in": "complaint",      # lowercase CS gold
+        "Customer_Request": "RETURN", # uppercase CS gold
+    }
+
+    match_result = _fd_field_match(fd_update, fd_props)
+
+    assert match_result["Level_in"]["match"] is True, (
+        "Case-insensitive match: 'Complaint' vs 'complaint' -> True"
+    )
+    assert match_result["Customer_Request"]["match"] is True, (
+        "Case-insensitive match: 'Return' vs 'RETURN' -> True"
+    )
