@@ -303,7 +303,82 @@ def _parse_combined(raw_output: str) -> dict:
     return {"properties": properties, "verdict": verdict}
 
 
-async def run_ai_team(ticket: dict, selless: dict | None = None) -> dict:
+def _build_classify_prompt(ticket: dict, selless: dict | None) -> str:
+    """Pass-1: classify only. Selless data is included so the sub-type respects
+    the order record (e.g. wrong-variant claims verified against ordered variant)."""
+    body = redact_text(ticket.get("body", ""))
+    subject = redact_text(ticket.get("subject", ""))
+    sb = (f"<selless_order_data>\n{json.dumps(selless, ensure_ascii=False)}\n</selless_order_data>\n\n"
+          if selless else "<selless_order_data>\n(no order resolved)\n</selless_order_data>\n\n")
+    return (
+        "Classify this customer support ticket. Return EXACTLY ONE JSON object, no prose:\n"
+        '{"category":"complaint|change_request|inquiry|other",'
+        '"customer_request":"<level-2 sub-type: Return/Replace/Partial_Refund/Full_Refund/Review/'
+        'Cancel_Order/Change_Shipping_Address/Change_Non_Shipping_Address/Change_Product_Variant/'
+        'Ask_About_Order/Ask_About_Delivery_Status/Ask_About_Policy/Ask_About_Product/'
+        'Ask_About_Promotion>","order_ref":"<order code or empty>","high_risk":true|false}\n\n'
+        "Rules (CS gold standard): a fit/size complaint on a DELIVERED item within guarantee = "
+        "Replace (not Return, not Change_Product_Variant). Return = customer explicitly wants money "
+        "back. Change_Product_Variant = pre-delivery variant swap. If the customer claims a wrong "
+        "variant but the Selless order shows they received what they ordered, it is "
+        "Change_Product_Variant (they picked wrong), not Replace. po_status=CANCELLED with an OOS/"
+        "angry customer = Full_Refund, not Ask_About_Order.\n\n"
+        f"<ticket_metadata>\nsubject: {subject}\n</ticket_metadata>\n\n"
+        f"{sb}"
+        f"<ticket_body>\n{body}\n</ticket_body>\n"
+    )
+
+
+def _build_draft_prompt2(ticket: dict, selless: dict | None, templates_text: str,
+                         allowed_codes: list[str], subtype: str) -> str:
+    """Pass-2: draft with the REAL template bodies injected. The sub-type is already
+    decided; the model selects template_code from the allowed set and FILLS the reply
+    from the actual template content (all mandatory elements: offers/discounts/refund
+    confirmations)."""
+    body = redact_text(ticket.get("body", ""))
+    subject = redact_text(ticket.get("subject", ""))
+    order_ref = redact_text(ticket.get("order_ref", ""))
+    sb = (f"<selless_order_data>\nREAL order data (ground truth — fill status/tracking/variant/"
+          f"amounts from it; never fabricate):\n{json.dumps(selless, ensure_ascii=False)}\n"
+          f"</selless_order_data>\n\n" if selless else
+          "<selless_order_data>\nNo order resolved — per D-34 draft a clarify-order reply asking "
+          "for order number/checkout email; never fabricate.\n</selless_order_data>\n\n")
+    allowed_str = ", ".join(allowed_codes) if allowed_codes else "(none — this sub-type has no template; draft a brief clarification)"
+    return (
+        f"You are drafting the customer reply for a ticket already classified as "
+        f"customer_request = \"{subtype}\". ALWAYS-DRAFT (D-33): return action=\"draft\".\n\n"
+        "Use the ACTUAL template library below. Steps:\n"
+        f"1) Pick template_code = exactly ONE code from the ALLOWED set: {allowed_str}. "
+        "It MUST be the code whose template best matches this ticket + the Selless status. "
+        "Never invent a code, never use a code outside this set.\n"
+        "2) FILL that template into a complete, ready-to-send reply — include EVERY mandatory "
+        "element the template specifies (e.g. the offer, the % discount, refund-window "
+        "confirmation, measurement request). Ground all order facts in the Selless data.\n"
+        "3) Match how the CS team resolves it (decision + offer), not just the topic.\n\n"
+        "<templates>\n" + templates_text + "\n</templates>\n\n"
+        "Return EXACTLY ONE JSON object, no prose:\n"
+        '{"properties":{"category":"...","customer_request":"' + subtype + '","confidence":"high|med|low",'
+        '"order_ref":"...","issue_type":"...","product_line":"...","template_code":"<one allowed code>",'
+        '"flow":"...","step":"...","rootcause":"...","resolution_status":"...","high_risk":true|false},'
+        '"verdict":{"action":"draft","body":"<full filled reply>","template_code":"<same code>",'
+        '"escalation_hint":null}}\n\n'
+        f"ticket_id: {ticket.get('ticket_id','unknown')}\n"
+        f"<ticket_metadata>\nsubject: {subject}\norder_ref: {order_ref}\n</ticket_metadata>\n\n"
+        f"{sb}"
+        f"<ticket_body>\n{body}\n</ticket_body>\n"
+    )
+
+
+async def _run_cli(prompt: str) -> tuple[int, str, str]:
+    proc = await asyncio.create_subprocess_exec(
+        *_CLAUDE_CLI, stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=str(_REPO_ROOT))
+    out_b, err_b = await proc.communicate(input=prompt.encode())
+    return proc.returncode, out_b.decode(errors="replace"), err_b.decode(errors="replace")
+
+
+async def run_ai_team(ticket: dict, selless: dict | None = None,
+                      category: str | None = None) -> dict:
     """Run the real cs-agent-team on *ticket*; return {properties, verdict}.
 
     D-33 always-draft: verdict is always action=draft. On cli_error or injection,
@@ -319,25 +394,37 @@ async def run_ai_team(ticket: dict, selless: dict | None = None) -> dict:
         {"reason": reason, "signals": {"injection": True}} if is_inj else None
     )
 
+    def _cli_error(stage: str, err: str) -> dict:
+        return {"properties": {}, "verdict": {
+            "action": "draft", "body": "", "citations": [],
+            "escalation_hint": {"reason": f"cli_error:{stage}",
+                                "signals": {"stderr": redact_text(err[:200])}}}}
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *_CLAUDE_CLI,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(_REPO_ROOT),
-        )
-        out_b, err_b = await proc.communicate(input=_build_test_prompt(ticket, selless).encode())
-        if proc.returncode != 0:
-            # D-33: cli_error → always-draft with advisory hint, never escalate=no-draft
-            return {"properties": {}, "verdict": {
-                "action": "draft", "body": "", "citations": [],
-                "escalation_hint": {
-                    "reason": "cli_error",
-                    "signals": {"stderr": redact_text(err_b.decode(errors='replace')[:200])},
-                }}}
-        parsed = _parse_combined(out_b.decode(errors="replace"))
-        # Merge injection hint if the pre-screen flagged (advisory only — never changes action)
+        # PASS 1 — classify (Selless-aware so the sub-type respects the order record).
+        rc1, out1, err1 = await _run_cli(_build_classify_prompt(ticket, selless))
+        if rc1 != 0:
+            return _cli_error("classify", err1)
+        cls = _parse_combined(out1)["properties"] or _parse_combined(out1)["verdict"] or {}
+        subtype = (cls.get("customer_request") or "").strip()
+        cat = category or ""
+        if not cat:  # infer category from the classified macro-category
+            cat = {"complaint": "complaint", "change_request": "change_request",
+                   "inquiry": "inquiry"}.get((cls.get("category") or "").strip(), "inquiry")
+
+        # PASS 2 — draft with the REAL template bodies for that sub-type injected.
+        templates = _load_templates_for_subtype(subtype, cat) if subtype else _load_templates(cat)
+        allowed = _allowed_codes_for_subtype(subtype)
+        rc2, out2, err2 = await _run_cli(
+            _build_draft_prompt2(ticket, selless, templates, allowed, subtype or "Ask_About_Order"))
+        if rc2 != 0:
+            return _cli_error("draft", err2)
+        parsed = _parse_combined(out2)
+        # Backfill classification fields from pass-1 if pass-2 omitted them.
+        for k in ("category", "customer_request", "order_ref", "high_risk"):
+            if not parsed["properties"].get(k) and cls.get(k) not in (None, ""):
+                parsed["properties"][k] = cls.get(k)
+        # Advisory injection hint (D-14) — never changes the draft.
         if injection_hint and parsed["verdict"].get("escalation_hint") is None:
             parsed["verdict"]["escalation_hint"] = injection_hint
         return parsed
@@ -384,7 +471,7 @@ async def collect(per_cat: int, only_tid: str | None, only_cat: str | None) -> N
                 }
                 # D-34: resolve real order data by code on api.selless.com (read-only).
                 selless = await fetch_selless_order(sclient, order_code) if order_code else None
-                ai = await run_ai_team(ticket, selless)
+                ai = await run_ai_team(ticket, selless, cat)
                 rec = {
                     "category_file": cat,
                     "ticket_id": tid,
