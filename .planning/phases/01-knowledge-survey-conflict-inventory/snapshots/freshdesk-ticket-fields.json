@@ -3,8 +3,7 @@
     "source": "GET /api/v2/ticket_fields",
     "captured": "2026-06-05",
     "version": 1,
-    "note": "Static snapshot — runtime/tests MUST read this file, never the network. Regenerate with scripts/fetch_ticket_fields_snapshot.py when ticket_fields change.",
-    "verified_from": "ticket 7508382 (live FD payload) + WorkFlow.svg taxonomy"
+    "note": "Static snapshot — runtime/tests MUST read this file, never the network. Regenerate with scripts/fetch_ticket_fields_snapshot.py when ticket_fields change."
   },
   "nested": {
     "Level_in": {
@@ -28,15 +27,108 @@
         "Replace",
         "Full_Refund",
         "Partial_Refund"
-      ]
+      ],
+      "Compliment": [
+        "Good_Product",
+        "Good_Service"
+      ],
+      "Dispute": [],
+      "Chargeback/Claim": [],
+      "Auto_Email": [
+        "Ask_About_Product",
+        "Ask_About_Policy",
+        "Ask_About_Order",
+        "Ask_About_Delivery_Status",
+        "Change_Product_Variant",
+        "Change_Shipping_Address",
+        "Change_Non_Shipping_Address",
+        "Cancel_Order",
+        "Review",
+        "Return",
+        "Replace",
+        "Full_Refund",
+        "Partial_Refund",
+        "Warning_Paygate_Order_Review",
+        "Warning_Wrong_Shipping_Address",
+        "Warning_Early_Fraud",
+        "Unsubscribe"
+      ],
+      "Email_MKT": [
+        "Unsubscribe",
+        "Review",
+        "Return",
+        "Replace",
+        "Full_Refund",
+        "Partial_Refund",
+        "Ask_About_Delivery_Status",
+        "Ask_About_Order",
+        "Ask_About_Policy",
+        "Ask_About_Product",
+        "Change_Product_Variant",
+        "Change_Shipping_Address",
+        "Change_Non_Shipping_Address",
+        "Cancel_Order"
+      ],
+      "Retrieval": []
     }
   },
   "dropdowns": {
-    "Rootcause": [],
-    "Flow": [],
-    "Section_Flow": [],
-    "Product_line": [],
-    "Level_out": [],
+    "Rootcause": [
+      "Shipping",
+      "Fulfillment",
+      "Product",
+      "Content",
+      "Customer",
+      "Undefined",
+      "NA",
+      "Policy",
+      "System_error",
+      "Transaction",
+      "Agent_error",
+      "Supplier",
+      "Other",
+      "System_limitation"
+    ],
+    "Flow": [
+      "REPLACEMENT_DEFINE",
+      "DEFECTIVE_REFUND_DEFINE",
+      "EXPECTATION_REFUND_DEFINE",
+      "CANCEL_IN_POLICY",
+      "CANCEL_OUT_POLICY",
+      "CHANGE_ADDRESS_OUT_POLICY",
+      "CHANGE_VARIANT_OUT_POLICY"
+    ],
+    "Section_Flow": [
+      "BRA_SIZING",
+      "DRESS_SIZING",
+      "PANTS_SIZING",
+      "TSHIRT_SIZING",
+      "PANTIES_SIZING"
+    ],
+    "Product_line": [
+      "Bra",
+      "Pant",
+      "Dress",
+      "Accessories",
+      "T-shirt",
+      "Panties",
+      "Shapewear",
+      "Loungewear",
+      "Cosmetics",
+      "Simmoji",
+      "NA"
+    ],
+    "Level_out": [
+      "Update",
+      "Inquiry",
+      "Compliment",
+      "Dispute",
+      "Win",
+      "Lose",
+      "Chargeback/Claim",
+      "Complaint/Dispute",
+      "Retrieval"
+    ],
     "Package_status": [],
     "Category": []
   }

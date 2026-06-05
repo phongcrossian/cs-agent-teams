@@ -106,7 +106,9 @@ def _extract_snapshot(fields: list[dict]) -> dict:
     for field in fields:
         name: str = (field.get("name") or "").lower()
         label: str = (field.get("label") or "").lower()
-        field_type: str = field.get("field_type", "")
+        # Freshdesk ticket_fields payload uses the key "type" (e.g. "nested_field",
+        # "custom_dropdown"); accept legacy "field_type" as a fallback.
+        field_type: str = field.get("type") or field.get("field_type", "")
         choices = field.get("choices")
 
         # nested_field -> Level_in taxonomy
