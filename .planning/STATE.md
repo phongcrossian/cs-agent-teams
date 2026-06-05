@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-27)
 Phase: 04 (reply-pipeline-classify-extract-ground-draft-safety-guards) — EXECUTING
 Plan: 1 of 7
 Status: Executing Phase 04
-Last activity: 2026-06-05 -- Phase 04 execution started
+Last activity: 2026-06-05 -- Completed quick task 260605-mfi: FD props + cf_order Selless capture
 
 Progress: [██████████] 100%
 
@@ -152,6 +152,14 @@ None yet.
 - Phase 5 (Eval): faithfulness rubric, golden-set stratification, and numeric quality-bar thresholds need focused design.
 - Phase 6 (Routing/rollout): rollout-control mechanics and go/no-go gate definitions are MEDIUM confidence.
 - Selless backend language + API latency/availability unconfirmed — load-test before Phase 7.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260605-mfi | Capture FD custom_fields + drive Selless via cf_order in harness; snapshot ticket_fields enums | 2026-06-05 | 472f3dd | [260605-mfi-fd-props-cf-order-capture](./quick/260605-mfi-fd-props-cf-order-capture/) |
+
+> Note: the `ticket_fields` enum snapshot (freshdesk-ticket-fields.json) captures `cf_level_out` choices — partially addresses blocker AI-05.
 
 ## Deferred Items
 
