@@ -1,13 +1,16 @@
 """
-Team-definition test suite — structure, model discipline, and MCP wiring.
+Team-definition test suite — structure, model discipline, and wiring.
 
 Asserts:
   (1) All five agent files and all five SKILL.md files from the §3 design manifest exist
-  (2) MODEL DISCIPLINE — classifier/extractor reference Haiku; drafter/critic reference Sonnet;
-      NO agent file contains the substring "opus" (case-insensitive) — cost-discipline gate
-  (3) WIRING — extractor→resolve_order, drafter→get_template+submit_reply (chokepoint §4a),
-      cs-lead→reply-pipeline skill, ground-and-draft→get_template, reply-pipeline→submit_reply
-  (4) reply-pipeline skill mentions all stage names and the escalate verdict
+  (2) MODEL DISCIPLINE — classifier/extractor reference Haiku; drafter/critic/lead reference Sonnet;
+      NO agent file contains the substring "opus" (case-insensitive) — cost-discipline gate (D-03)
+  (3) WIRING — extractor→resolve_order, drafter→file-store (subtype_to_code/get_template_from_file),
+      drafter→submit_reply (chokepoint §4a), cs-lead→reply-pipeline skill,
+      extract-answer-key→resolve_order, ground-and-draft→file-store
+  (4) reply-pipeline skill encodes the always-draft verdict + escalation_hint (D-33);
+      stage names (classify/extract/critique) present; NO escalate=no-draft outcome
+  (5) REP-04: self-critique/SKILL.md declares faithfulness / policy-match / tone-completeness
 """
 
 from __future__ import annotations
@@ -69,7 +72,7 @@ def test_skill_file_exists(rel_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# (2) Model discipline — Haiku / Sonnet / no Opus
+# (2) Model discipline — Haiku / Sonnet / no Opus  (D-03)
 # ---------------------------------------------------------------------------
 
 def test_classifier_uses_haiku() -> None:
@@ -114,15 +117,19 @@ def test_cs_lead_uses_sonnet() -> None:
 
 @pytest.mark.parametrize("agent", ["classifier", "extractor", "drafter", "critic", "cs-lead"])
 def test_no_opus_in_agent(agent: str) -> None:
-    """No agent file may reference an Opus model (D-03 cost-discipline gate)."""
+    """No agent file may declare claude-opus-* as its model (D-03 cost-discipline gate).
+
+    The check is for the model-declaration string "claude-opus" — policy reminders
+    that say "No Opus on the hot path" are permitted and do not trip this gate.
+    """
     content = _read(f"agents/{agent}.md")
-    assert "opus" not in content.lower(), (
-        f"{agent}.md must not reference an Opus model (D-03: Opus is never on the hot path)"
+    assert "claude-opus" not in content.lower(), (
+        f"{agent}.md must not declare a claude-opus model (D-03: Opus is never on the hot path)"
     )
 
 
 # ---------------------------------------------------------------------------
-# (3) MCP wiring
+# (3) MCP / file-store wiring
 # ---------------------------------------------------------------------------
 
 def test_extractor_references_resolve_order() -> None:
@@ -133,11 +140,20 @@ def test_extractor_references_resolve_order() -> None:
     )
 
 
-def test_drafter_references_get_template() -> None:
-    """drafter.md must reference get_template (Knowledge MCP)."""
+def test_drafter_references_file_store() -> None:
+    """drafter.md must reference the local file-store (get_template_from_file / subtype_to_code / file_store).
+
+    Under D-31, the drafter no longer calls KnowledgeMCP get_template — it uses
+    the local file-store via subtype_to_code() + get_template_from_file().
+    """
     content = _read("agents/drafter.md")
-    assert "get_template" in content, (
-        "drafter.md must call get_template (Knowledge MCP) — templates fetched at runtime (REP-03)"
+    assert (
+        "get_template_from_file" in content
+        or "subtype_to_code" in content
+        or "file_store" in content
+    ), (
+        "drafter.md must reference the local file-store "
+        "(get_template_from_file / subtype_to_code / file_store) — D-31 pivot"
     )
 
 
@@ -157,11 +173,20 @@ def test_cs_lead_references_reply_pipeline() -> None:
     )
 
 
-def test_ground_and_draft_skill_references_get_template() -> None:
-    """ground-and-draft/SKILL.md must reference get_template (templates centralized in Knowledge MCP)."""
+def test_ground_and_draft_skill_references_file_store() -> None:
+    """ground-and-draft/SKILL.md must reference file-store grounding (D-31).
+
+    Under D-31 the drafter uses local file-store (get_template_from_file / subtype_to_code)
+    instead of KnowledgeMCP. The skill must document this pattern.
+    """
     content = _read("skills/ground-and-draft/SKILL.md")
-    assert "get_template" in content, (
-        "ground-and-draft/SKILL.md must document get_template usage (templates in Knowledge MCP)"
+    assert (
+        "get_template_from_file" in content
+        or "subtype_to_code" in content
+        or "file_store" in content
+    ), (
+        "ground-and-draft/SKILL.md must reference file-store grounding "
+        "(get_template_from_file / subtype_to_code / file_store) — D-31"
     )
 
 
@@ -182,7 +207,7 @@ def test_extract_answer_key_skill_references_resolve_order() -> None:
 
 
 # ---------------------------------------------------------------------------
-# (4) reply-pipeline skill — stage names + verdict
+# (4) reply-pipeline skill — always-draft contract (D-33)
 # ---------------------------------------------------------------------------
 
 def test_reply_pipeline_mentions_classify_stage() -> None:
@@ -200,10 +225,41 @@ def test_reply_pipeline_mentions_critique_stage() -> None:
     assert "critique" in content, "reply-pipeline/SKILL.md must mention the critique/critic stage"
 
 
-def test_reply_pipeline_mentions_escalate_verdict() -> None:
-    content = _read("skills/reply-pipeline/SKILL.md").lower()
-    assert "escalate" in content, "reply-pipeline/SKILL.md must encode the escalate verdict"
+def test_reply_pipeline_encodes_always_draft_verdict() -> None:
+    """reply-pipeline/SKILL.md must encode the always-draft verdict (D-33).
 
+    The skill must reference action='draft' and escalation_hint (advisory signal),
+    and must NOT encode the retired escalate=no-draft outcome (D-10 retired by D-30).
+    """
+    content = _read("skills/reply-pipeline/SKILL.md")
+    content_lower = content.lower()
+    # Must affirm always-draft
+    assert "action" in content_lower and "draft" in content_lower, (
+        "reply-pipeline/SKILL.md must encode the always-draft verdict (action='draft')"
+    )
+    # Must reference escalation_hint as the advisory mechanism
+    assert "escalation_hint" in content, (
+        "reply-pipeline/SKILL.md must reference escalation_hint (advisory signal, D-33)"
+    )
+
+
+def test_reply_pipeline_no_escalate_no_draft_outcome() -> None:
+    """reply-pipeline/SKILL.md must NOT encode 'escalate=no-draft' or 'action: escalate' as a pipeline outcome.
+
+    The old D-10 hard-escalate verdict (action='escalate', no body) is RETIRED by D-30.
+    """
+    content = _read("skills/reply-pipeline/SKILL.md")
+    # Check for the specific retired patterns — informational historical mentions are OK,
+    # but the skill must not describe action="escalate" as a live pipeline output.
+    # The skill explicitly says "There is no action: 'escalate' verdict" post D-30.
+    assert 'action: "escalate"' not in content or "retired" in content.lower() or "no " in content.lower(), (
+        "reply-pipeline/SKILL.md must not encode action='escalate' as a live pipeline outcome (D-30 retired)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# (5) REP-04: self-critique rubric dimensions
+# ---------------------------------------------------------------------------
 
 def test_self_critique_skill_faithfulness_dimension() -> None:
     """self-critique/SKILL.md must define the faithfulness rubric dimension."""

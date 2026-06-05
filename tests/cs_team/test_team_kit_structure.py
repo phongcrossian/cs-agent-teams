@@ -1,13 +1,16 @@
 """
-RED stubs asserting the §3 .claude/ manifest files exist.
+Structural assertions for the §3 .claude/ manifest files.
 
-Fails now (Wave 0 — files not created yet). Turns green by Wave 3 when the
-agent definitions, skill indexes, and hook scripts are created.
+Asserts the agent definitions, skill indexes, and hook scripts
+that comprise the always-draft cs-agent-team kit (post 04-01 pivot).
 
-§3 manifest (from design doc):
+§3 manifest (always-draft):
     .claude/agents/{cs-lead,classifier,extractor,drafter,critic}.md
     .claude/skills/{reply-pipeline,classify-ticket,extract-answer-key,ground-and-draft,self-critique}/SKILL.md
-    .claude/hooks/{injection_screen,pre_send_guard,escalation_gate,grounding_check,pii_redact}.py
+    .claude/hooks/{injection_screen,pii_redact}.py   ← only the two surviving hooks
+
+The four deleted guard hooks (pre_send_guard, escalation_gate, grounding_check,
+authorized_offer) were removed in 04-01 and must NOT be asserted here.
 """
 
 from __future__ import annotations
@@ -67,21 +70,18 @@ def test_skill_file_exists(rel_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Hook scripts
+# Hook scripts — only the two surviving hooks after 04-01
 # ---------------------------------------------------------------------------
 
 _HOOK_FILES = [
-    "hooks/injection_screen.py",
-    "hooks/pre_send_guard.py",
-    "hooks/escalation_gate.py",
-    "hooks/grounding_check.py",
-    "hooks/pii_redact.py",
+    "hooks/injection_screen.py",   # D-14 — injection screening (UserPromptSubmit)
+    "hooks/pii_redact.py",         # D-04 — PII redaction (PostToolUse)
 ]
 
 
 @pytest.mark.parametrize("rel_path", _HOOK_FILES)
 def test_hook_file_exists(rel_path: str) -> None:
-    """Each hook script must exist under .claude/hooks/."""
+    """Each surviving hook script must exist under .claude/hooks/."""
     path = _CLAUDE_DIR / rel_path
     assert path.exists(), f"Missing hook script: {path}"
     content = path.read_text()
@@ -91,3 +91,17 @@ def test_hook_file_exists(rel_path: str) -> None:
     assert "sys.stdin" in content or "stdin" in content, (
         f"{path} must read from sys.stdin (Claude Code hook contract)"
     )
+
+
+def test_deleted_hook_files_absent() -> None:
+    """The four guard hooks deleted in 04-01 must NOT exist on disk."""
+    hooks_dir = _CLAUDE_DIR / "hooks"
+    for name in [
+        "pre_send_guard.py",
+        "escalation_gate.py",
+        "grounding_check.py",
+        "authorized_offer.py",
+    ]:
+        assert not (hooks_dir / name).exists(), (
+            f".claude/hooks/{name} must be absent after 04-01 guard deletion"
+        )
