@@ -42,6 +42,7 @@ from src.file_store.fd_classification import (  # noqa: E402
     build_fd_property_update,
     OWNED_FIELDS,
 )
+from src.file_store.ticket_fields_store import field_choices  # noqa: E402
 
 # Reuse the production runner machinery (redaction, pre-screen, CLI invoke, parse).
 # D-32: _post_screen_draft, _sanitize_ticket_id, _state_file_path removed (deleted guard hooks gone).
@@ -492,6 +493,33 @@ def _parse_combined(raw_output: str) -> dict:
     return {"properties": properties, "verdict": verdict}
 
 
+def _fd_enum_constraint_block() -> str:
+    """Build a HARD-CONSTRAINT block listing allowed enum values for Rootcause, Flow,
+    and Section_Flow, sourced from field_choices() (loader-sourced, snapshot-synced).
+
+    Pattern mirrors the ALLOWED TEMPLATE CODES BY SUB-TYPE block already injected
+    for template_code (lines ~332-363). The AI MUST choose VERBATIM from each list;
+    if no value fits, it leaves the field empty. NEVER invent or paraphrase a value.
+
+    Verbatim-enum discipline locked by 08-CONTEXT.md decision VERB-01.
+    """
+    lines: list[str] = [
+        "ALLOWED FD CLASSIFICATION ENUM VALUES (verbatim-enum discipline — 08-CONTEXT VERB-01):",
+        "For each of the following fields, you MUST choose a value VERBATIM from its allowed list.",
+        "If none of the allowed values fits, leave the field empty (\"\"). NEVER invent, paraphrase,",
+        "or free-pick a value — the validator will flag any non-verbatim value as 'invalid'.",
+        "",
+    ]
+    for field_name in ("Rootcause", "Flow", "Section_Flow"):
+        choices = field_choices(field_name)
+        if choices:
+            lines.append(f"  {field_name}: {', '.join(choices)}")
+        else:
+            lines.append(f"  {field_name}: (no enum values available — leave empty)")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _build_classify_prompt(ticket: dict, selless: dict | None) -> str:
     """Pass-1: classify only. Selless data is included so the sub-type respects
     the order record (e.g. wrong-variant claims verified against ordered variant)."""
@@ -499,6 +527,7 @@ def _build_classify_prompt(ticket: dict, selless: dict | None) -> str:
     subject = redact_text(ticket.get("subject", ""))
     sb = (f"<selless_order_data>\n{json.dumps(selless, ensure_ascii=False)}\n</selless_order_data>\n\n"
           if selless else "<selless_order_data>\n(no order resolved)\n</selless_order_data>\n\n")
+    enum_block = _fd_enum_constraint_block()
     return (
         "Classify this customer support ticket. Return EXACTLY ONE JSON object, no prose:\n"
         '{"category":"complaint|change_request|inquiry|other",'
@@ -512,6 +541,7 @@ def _build_classify_prompt(ticket: dict, selless: dict | None) -> str:
         "variant but the Selless order shows they received what they ordered, it is "
         "Change_Product_Variant (they picked wrong), not Replace. po_status=CANCELLED with an OOS/"
         "angry customer = Full_Refund, not Ask_About_Order.\n\n"
+        f"{enum_block}"
         f"<ticket_metadata>\nsubject: {subject}\n</ticket_metadata>\n\n"
         f"{sb}"
         f"<ticket_body>\n{body}\n</ticket_body>\n"
@@ -533,6 +563,7 @@ def _build_draft_prompt2(ticket: dict, selless: dict | None, templates_text: str
           "<selless_order_data>\nNo order resolved — per D-34 draft a clarify-order reply asking "
           "for order number/checkout email; never fabricate.\n</selless_order_data>\n\n")
     allowed_str = ", ".join(allowed_codes) if allowed_codes else "(none — this sub-type has no template; draft a brief clarification)"
+    enum_block = _fd_enum_constraint_block()
     return (
         f"You are drafting the customer reply for a ticket already classified as "
         f"customer_request = \"{subtype}\". ALWAYS-DRAFT (D-33): return action=\"draft\".\n\n"
@@ -545,10 +576,14 @@ def _build_draft_prompt2(ticket: dict, selless: dict | None, templates_text: str
         "confirmation, measurement request). Ground all order facts in the Selless data.\n"
         "3) Match how the CS team resolves it (decision + offer), not just the topic.\n\n"
         "<templates>\n" + templates_text + "\n</templates>\n\n"
+        f"{enum_block}"
         "Return EXACTLY ONE JSON object, no prose:\n"
         '{"properties":{"category":"...","customer_request":"' + subtype + '","confidence":"high|med|low",'
         '"order_ref":"...","issue_type":"...","product_line":"...","template_code":"<one allowed code>",'
-        '"flow":"...","step":"...","rootcause":"...","resolution_status":"...","high_risk":true|false},'
+        '"flow":"<pick VERBATIM from ALLOWED Flow list above, else empty>","step":"...",'
+        '"rootcause":"<pick VERBATIM from ALLOWED Rootcause list above, else empty>",'
+        '"section_flow":"<pick VERBATIM from ALLOWED Section_Flow list above, else empty>",'
+        '"resolution_status":"...","high_risk":true|false},'
         '"verdict":{"action":"draft","body":"<full filled reply>","template_code":"<same code>",'
         '"escalation_hint":null}}\n\n'
         f"ticket_id: {ticket.get('ticket_id','unknown')}\n"
