@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Offline Evaluation Harness (THE GATE) | 0/TBD | Blocked on Phase 4 reopen | - |
 | 6. Routing Gate, Monitoring & Kill-Switch | 0/TBD | Not started | - |
 | 7. Staged Rollout (5% → 100%) | 0/TBD | Not started | - |
-| 8. Ticket Re-Classification & FD Property Write-Back | 2/2 | Complete   | 2026-06-05 |
+| 8. Ticket Re-Classification & FD Property Write-Back | 3/3 | Complete   | 2026-06-08 |
 
 ### Phase 8: Ticket Re-Classification & FD Property Write-Back
 
