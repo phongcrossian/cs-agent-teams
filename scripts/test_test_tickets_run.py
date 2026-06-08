@@ -31,8 +31,12 @@ from scripts.test_tickets_run import (
     _apply_caps,
     _assemble_fd_property_update,
     _fd_field_match,
+    _build_classify_prompt,
+    _build_draft_prompt2,
     OWNED_FIELDS,
 )
+
+from src.file_store.ticket_fields_store import field_choices
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +826,146 @@ def test_build_xlsx_graceful_missing_fd_keys(tmp_path: Path, monkeypatch: pytest
 
     ttr.build_xlsx()  # must not raise on missing fd_property_update
     assert xlsx_path.exists(), "build_xlsx should write workbook even for legacy records"
+
+
+# ---------------------------------------------------------------------------
+# 08-03: enum injection tests for _build_classify_prompt / _build_draft_prompt2
+# Assert that both prompt builders inject the allowed enum values for
+# Rootcause / Flow / Section_Flow, sourced from field_choices() (loader-sourced).
+# OFFLINE: pure string assertions on the built prompt — no LLM/subprocess call.
+# ---------------------------------------------------------------------------
+
+_FAKE_TICKET_FOR_PROMPT = {
+    "ticket_id": "9999999",
+    "subject": "Test subject",
+    "body": "Test customer message body",
+    "order_ref": "",
+}
+
+
+def test_classify_prompt_enum_injection() -> None:
+    """Test A: _build_classify_prompt contains the allowed enum values for
+    Rootcause, Flow, and Section_Flow, all sourced from field_choices().
+
+    The prompt must also carry a verbatim-discipline instruction token
+    (e.g. "VERBATIM" or "verbatim") alongside the Rootcause/Flow/Section_Flow
+    allowed-list block.
+
+    OFFLINE: pure string assertion — no LLM / subprocess call.
+    """
+    prompt = _build_classify_prompt(_FAKE_TICKET_FOR_PROMPT, selless=None)
+
+    # (1) Every Rootcause enum value must appear verbatim in the prompt
+    rootcause_values = field_choices("Rootcause")
+    assert len(rootcause_values) > 0, "field_choices('Rootcause') must return non-empty list"
+    for val in rootcause_values:
+        assert val in prompt, (
+            f"Rootcause enum value {val!r} must appear in _build_classify_prompt output"
+        )
+
+    # (2) Every Flow enum value must appear verbatim in the prompt
+    flow_values = field_choices("Flow")
+    assert len(flow_values) > 0, "field_choices('Flow') must return non-empty list"
+    for val in flow_values:
+        assert val in prompt, (
+            f"Flow enum value {val!r} must appear in _build_classify_prompt output"
+        )
+
+    # (3) Every Section_Flow enum value must appear verbatim in the prompt
+    section_flow_values = field_choices("Section_Flow")
+    assert len(section_flow_values) > 0, "field_choices('Section_Flow') must return non-empty list"
+    for val in section_flow_values:
+        assert val in prompt, (
+            f"Section_Flow enum value {val!r} must appear in _build_classify_prompt output"
+        )
+
+    # (4) A verbatim-discipline instruction token must be present alongside the enum fields
+    prompt_lower = prompt.lower()
+    assert "verbatim" in prompt_lower, (
+        "A 'verbatim' (or 'VERBATIM') discipline instruction must appear in "
+        "_build_classify_prompt alongside Rootcause/Flow/Section_Flow enum block"
+    )
+
+
+def test_draft_prompt2_enum_injection() -> None:
+    """Test B: _build_draft_prompt2 contains the allowed enum values for
+    Rootcause, Flow, and Section_Flow, all sourced from field_choices().
+
+    The prompt must also carry a verbatim-discipline instruction token.
+
+    OFFLINE: pure string assertion — no LLM / subprocess call.
+    """
+    prompt = _build_draft_prompt2(
+        ticket=_FAKE_TICKET_FOR_PROMPT,
+        selless=None,
+        templates_text="",
+        allowed_codes=["G2"],
+        subtype="Ask_About_Order",
+    )
+
+    # (1) Every Rootcause enum value must appear verbatim in the prompt
+    rootcause_values = field_choices("Rootcause")
+    assert len(rootcause_values) > 0, "field_choices('Rootcause') must return non-empty list"
+    for val in rootcause_values:
+        assert val in prompt, (
+            f"Rootcause enum value {val!r} must appear in _build_draft_prompt2 output"
+        )
+
+    # (2) Every Flow enum value must appear verbatim in the prompt
+    flow_values = field_choices("Flow")
+    assert len(flow_values) > 0, "field_choices('Flow') must return non-empty list"
+    for val in flow_values:
+        assert val in prompt, (
+            f"Flow enum value {val!r} must appear in _build_draft_prompt2 output"
+        )
+
+    # (3) Every Section_Flow enum value must appear verbatim in the prompt
+    section_flow_values = field_choices("Section_Flow")
+    assert len(section_flow_values) > 0, "field_choices('Section_Flow') must return non-empty list"
+    for val in section_flow_values:
+        assert val in prompt, (
+            f"Section_Flow enum value {val!r} must appear in _build_draft_prompt2 output"
+        )
+
+    # (4) A verbatim-discipline instruction token must be present
+    prompt_lower = prompt.lower()
+    assert "verbatim" in prompt_lower, (
+        "A 'verbatim' (or 'VERBATIM') discipline instruction must appear in "
+        "_build_draft_prompt2 alongside Rootcause/Flow/Section_Flow enum block"
+    )
+
+
+def test_verbatim_enum_loader_sourced() -> None:
+    """Test C: the classify prompt contains a Rootcause value from field_choices() that
+    does NOT appear in the raw prompt template text (i.e. it can only be there because
+    the enum block was injected from the loader). This guards the must_have:
+    "stays in sync with the snapshot".
+
+    We pick 'System_limitation' — a Rootcause enum value that does not appear in any
+    existing prompt template text (no customer_request sub-type name, no policy phrase
+    contains it). Its presence in the built prompt proves loader-sourced injection.
+
+    OFFLINE: pure string assertion — no LLM / subprocess call.
+    """
+    rootcause_values = field_choices("Rootcause")
+    assert len(rootcause_values) > 0, "field_choices('Rootcause') must return non-empty list for this test"
+
+    # Pick a value that cannot coincidentally appear in the raw prompt template text
+    # (not a substring of any customer_request name or policy phrase).
+    # 'System_limitation' is in the snapshot enum but never written into the template strings.
+    sampled_value = "System_limitation"
+    assert sampled_value in rootcause_values, (
+        f"Expected 'System_limitation' in field_choices('Rootcause'), got: {rootcause_values}"
+    )
+
+    prompt = _build_classify_prompt(_FAKE_TICKET_FOR_PROMPT, selless=None)
+
+    assert sampled_value in prompt, (
+        f"Rootcause value {sampled_value!r} (from field_choices) must appear in "
+        "_build_classify_prompt — proving the injected block is loader-sourced, "
+        "not a hard-coded stale literal. "
+        f"field_choices('Rootcause') returned: {rootcause_values}"
+    )
 
 
 def test_no_live_write_path_in_harness() -> None:
